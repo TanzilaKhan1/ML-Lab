@@ -1,0 +1,68 @@
+{
+  "info": {
+    "description": "Image Annotation Export",
+    "date_created": "2026-04-08T08:08:19.240Z",
+    "version": "1.0"
+  },
+  "licenses": [],
+  "images": [
+    {
+      "id": 1,
+      "file_name": "garden.png",
+      "width": 1024,
+      "height": 768
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "iscrowd": 0,
+      "segmentation": [
+        [
+          100,
+          100,
+          200,
+          100,
+          200,
+          200,
+          100,
+          200
+        ]
+      ],
+      "bbox": [
+        100,
+        100,
+        100,
+        100
+      ],
+      "area": 10000
+    },
+    {
+      "id": 2,
+      "image_id": 1,
+      "category_id": 2,
+      "iscrowd": 0,
+      "bbox": [
+        300,
+        300,
+        150,
+        100
+      ],
+      "area": 15000
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "animal",
+      "supercategory": "none"
+    },
+    {
+      "id": 2,
+      "name": "object",
+      "supercategory": "none"
+    }
+  ]
+}
