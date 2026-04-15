@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File)) continue;
     const buffer = Buffer.from(await file.arrayBuffer());
     const name = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    saveUploadedImage(name, buffer);
+    await saveUploadedImage(name, buffer);
     uploaded.push(name);
   }
 

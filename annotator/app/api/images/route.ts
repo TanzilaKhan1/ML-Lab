@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const filter = req.nextUrl.searchParams.get("filter") as ImageStatus | "all" | null;
-  return NextResponse.json(getImages(filter || "all"));
+  return NextResponse.json(await getImages(filter || "all"));
 }

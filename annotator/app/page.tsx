@@ -11,6 +11,50 @@ import type {
 } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
 
+/**
+ * Lazy thumbnail: renders a tiny <img> that loads from the R2 proxy only
+ * when scrolled into view. The browser's own disk cache + Cache-Control on
+ * /api/raw/ means re-navigating the sidebar is fast.
+ */
+function ImageThumb({ filename }: { filename: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || visible) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          io.disconnect();
+        }
+      },
+      { root: el.closest(".sidebar-images-scroll") || null, rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [visible]);
+
+  return (
+    <div
+      ref={ref}
+      className="w-10 h-10 rounded bg-[#0a0b0f] border border-[#2a2d3e] shrink-0 overflow-hidden flex items-center justify-center"
+    >
+      {visible ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/raw/${encodeURIComponent(filename)}`}
+          alt=""
+          className="w-full h-full object-cover"
+          loading="lazy"
+          draggable={false}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 const DEFAULT_LABELS: LabelDef[] = [
   { name: "object", color: "#FF6B6B" },
   { name: "person", color: "#4ECDC4" },
@@ -25,7 +69,7 @@ const LABEL_COLORS = [
   "#F0B27A", "#82E0AA", "#F1948A", "#AED6F1", "#D2B4DE",
 ];
 
-type Tool = "select" | "bbox" | "polygon" | "keypoint" | "pan";
+type Tool = "select" | "bbox" | "polygon" | "polyline" | "ellipse" | "keypoint" | "pan";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -61,6 +105,11 @@ export default function AnnotatorPage() {
   const [opacity, setOpacity] = useState(70);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [clipboard, setClipboard] = useState<Annotation | null>(null);
+  const [attrDraftKey, setAttrDraftKey] = useState("");
+  const [attrDraftVal, setAttrDraftVal] = useState("");
 
   const undoStack = useRef<Annotation[][]>([]);
   const redoStack = useRef<Annotation[][]>([]);
@@ -135,11 +184,14 @@ export default function AnnotatorPage() {
     const opacityHex = Math.round((opacityRef.current / 100) * 255).toString(16).padStart(2, "0");
 
     for (const ann of anns) {
+      if (ann.hidden) continue;
+      const interactive = activeToolRef.current === "select" && !ann.locked;
+
       if (ann.type === "bbox") {
         const rect = new fabric.Rect({
           left: ann.x, top: ann.y, width: ann.width, height: ann.height,
           fill: ann.color + opacityHex, stroke: ann.color, strokeWidth: 2,
-          selectable: activeToolRef.current === "select",
+          selectable: interactive, evented: interactive,
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 8,
           transparentCorners: false, borderColor: ann.color,
           lockRotation: true,
@@ -154,11 +206,32 @@ export default function AnnotatorPage() {
         });
         (text as any).isLabel = true;
         c.add(rect); c.add(text);
+      } else if (ann.type === "ellipse") {
+        const rx = (ann.width || 0) / 2;
+        const ry = (ann.height || 0) / 2;
+        const ellipse = new fabric.Ellipse({
+          left: ann.x, top: ann.y, rx, ry,
+          fill: ann.color + opacityHex, stroke: ann.color, strokeWidth: 2,
+          selectable: interactive, evented: interactive,
+          cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 8,
+          transparentCorners: false, borderColor: ann.color,
+          lockRotation: true,
+        });
+        (ellipse as any).annotationId = ann.id;
+        (ellipse as any).annotationType = "ellipse";
+        const text = new fabric.FabricText(ann.label, {
+          left: (ann.x || 0) + 2, top: (ann.y || 0) - 20,
+          fontSize: 12, fill: "#fff", backgroundColor: ann.color + "DD",
+          padding: 3, selectable: false, evented: false,
+          fontFamily: "Inter, sans-serif",
+        });
+        (text as any).isLabel = true;
+        c.add(ellipse); c.add(text);
       } else if (ann.type === "polygon" && ann.points) {
         const points = ann.points.map((p: number[]) => new fabric.Point(p[0], p[1]));
         const polygon = new fabric.Polygon(points, {
           fill: ann.color + opacityHex, stroke: ann.color, strokeWidth: 2,
-          selectable: activeToolRef.current === "select",
+          selectable: interactive, evented: interactive,
           lockRotation: true,
         });
         (polygon as any).annotationId = ann.id;
@@ -172,6 +245,24 @@ export default function AnnotatorPage() {
         });
         (text as any).isLabel = true;
         c.add(polygon); c.add(text);
+      } else if (ann.type === "polyline" && ann.points) {
+        const points = ann.points.map((p: number[]) => new fabric.Point(p[0], p[1]));
+        const polyline = new fabric.Polyline(points, {
+          fill: "transparent", stroke: ann.color, strokeWidth: 3,
+          selectable: interactive, evented: interactive,
+          lockRotation: true,
+        });
+        (polyline as any).annotationId = ann.id;
+        (polyline as any).annotationType = "polyline";
+        const bounds = polyline.getBoundingRect();
+        const text = new fabric.FabricText(ann.label, {
+          left: bounds.left + 2, top: bounds.top - 20,
+          fontSize: 12, fill: "#fff", backgroundColor: ann.color + "DD",
+          padding: 3, selectable: false, evented: false,
+          fontFamily: "Inter, sans-serif",
+        });
+        (text as any).isLabel = true;
+        c.add(polyline); c.add(text);
       } else if (ann.type === "keypoint") {
         // Outer ring
         const outerCircle = new fabric.Circle({
@@ -183,7 +274,7 @@ export default function AnnotatorPage() {
         const circle = new fabric.Circle({
           left: (ann.x || 0) - 5, top: (ann.y || 0) - 5, radius: 5,
           fill: ann.color, stroke: "#fff", strokeWidth: 2,
-          selectable: activeToolRef.current === "select",
+          selectable: interactive, evented: interactive,
         });
         (circle as any).annotationId = ann.id;
         (circle as any).annotationType = "keypoint";
@@ -202,19 +293,25 @@ export default function AnnotatorPage() {
 
   const scheduleAutoSave = useCallback((anns: Annotation[]) => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    // Capture filename and dims at schedule time. Reading them from refs inside
+    // the timer would let a pending save write the old image's annotations to
+    // whatever image is active when the timer fires.
+    const targetFilename = currentImageRef.current;
+    if (!targetFilename) return;
+    const width = imageDims.current.width;
+    const height = imageDims.current.height;
     setSaveIndicator("Saving...");
     autoSaveTimerRef.current = setTimeout(async () => {
-      if (!currentImageRef.current) return;
-      await fetch(`/api/annotations/${encodeURIComponent(currentImageRef.current)}`, {
+      await fetch(`/api/annotations/${encodeURIComponent(targetFilename)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: currentImageRef.current,
+          filename: targetFilename,
           annotations: anns,
           labels: labelsRef.current,
           status: anns.length > 0 ? "annotated" : "unannotated",
-          imageWidth: imageDims.current.width,
-          imageHeight: imageDims.current.height,
+          imageWidth: width,
+          imageHeight: height,
         }),
       });
       setSaveIndicator("Saved!");
@@ -253,6 +350,57 @@ export default function AnnotatorPage() {
     renderAnnotations(newAnns); scheduleAutoSave(newAnns);
   }, [selectedAnnotation, pushUndo, renderAnnotations, scheduleAutoSave]);
 
+  const copySelected = useCallback(() => {
+    const ann = annotationsRef.current.find((a) => a.id === selectedAnnotation);
+    if (!ann) return;
+    // Deep clone so subsequent edits to the original don't mutate the clipboard.
+    setClipboard(JSON.parse(JSON.stringify(ann)));
+    setSaveIndicator("Copied");
+    setTimeout(() => setSaveIndicator("Auto-save ON"), 1000);
+  }, [selectedAnnotation]);
+
+  /**
+   * Paste the clipboard annotation into the current image with a small offset
+   * so it's visually distinct from the source. Works across images because the
+   * clipboard lives in component state.
+   */
+  const pasteClipboard = useCallback(() => {
+    if (!clipboard) return;
+    pushUndo();
+    const offset = 12;
+    const cloned: Annotation = JSON.parse(JSON.stringify(clipboard));
+    cloned.id = uuidv4();
+    if (cloned.points) {
+      cloned.points = cloned.points.map(([x, y]) => [x + offset, y + offset]);
+    } else {
+      if (cloned.x != null) cloned.x += offset;
+      if (cloned.y != null) cloned.y += offset;
+    }
+    const newAnns = [...annotationsRef.current, cloned];
+    setAnnotations(newAnns); annotationsRef.current = newAnns;
+    setSelectedAnnotation(cloned.id);
+    renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+  }, [clipboard, pushUndo, renderAnnotations, scheduleAutoSave]);
+
+  const duplicateSelected = useCallback(() => {
+    const ann = annotationsRef.current.find((a) => a.id === selectedAnnotation);
+    if (!ann) return;
+    pushUndo();
+    const offset = 12;
+    const cloned: Annotation = JSON.parse(JSON.stringify(ann));
+    cloned.id = uuidv4();
+    if (cloned.points) {
+      cloned.points = cloned.points.map(([x, y]) => [x + offset, y + offset]);
+    } else {
+      if (cloned.x != null) cloned.x += offset;
+      if (cloned.y != null) cloned.y += offset;
+    }
+    const newAnns = [...annotationsRef.current, cloned];
+    setAnnotations(newAnns); annotationsRef.current = newAnns;
+    setSelectedAnnotation(cloned.id);
+    renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+  }, [selectedAnnotation, pushUndo, renderAnnotations, scheduleAutoSave]);
+
   const deleteAnnotation = useCallback((id: string) => {
     pushUndo();
     const newAnns = annotationsRef.current.filter((a) => a.id !== id);
@@ -260,6 +408,35 @@ export default function AnnotatorPage() {
     if (selectedAnnotation === id) setSelectedAnnotation(null);
     renderAnnotations(newAnns); scheduleAutoSave(newAnns);
   }, [pushUndo, selectedAnnotation, renderAnnotations, scheduleAutoSave]);
+
+  const toggleAnnotationFlag = useCallback(
+    (id: string, key: "hidden" | "locked") => {
+      const newAnns = annotationsRef.current.map((a) =>
+        a.id === id ? { ...a, [key]: !a[key] } : a,
+      );
+      setAnnotations(newAnns); annotationsRef.current = newAnns;
+      // If we just hid the selected annotation, drop the selection so the
+      // properties panel doesn't point at something invisible.
+      if (key === "hidden" && selectedAnnotation === id) setSelectedAnnotation(null);
+      renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+    },
+    [renderAnnotations, scheduleAutoSave, selectedAnnotation],
+  );
+
+  const setAnnotationAttribute = useCallback(
+    (id: string, key: string, value: string | null) => {
+      const newAnns = annotationsRef.current.map((a) => {
+        if (a.id !== id) return a;
+        const attrs = { ...(a.attributes || {}) };
+        if (value == null) delete attrs[key];
+        else attrs[key] = value;
+        return { ...a, attributes: attrs };
+      });
+      setAnnotations(newAnns); annotationsRef.current = newAnns;
+      scheduleAutoSave(newAnns);
+    },
+    [scheduleAutoSave],
+  );
 
   const zoomIn = useCallback(() => {
     const c = fabricRef.current; if (!c) return;
@@ -326,6 +503,12 @@ export default function AnnotatorPage() {
   }, [currentImage, annotations, labels, imageStatus, reviewComment, reviewHistory, fetchImages, fetchStats]);
 
   const loadImage = useCallback(async (filename: string) => {
+    // Cancel any pending auto-save so it can't fire after we switch images.
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
     // Save current image before switching
     if (currentImageRef.current && annotationsRef.current.length > 0) {
       await fetch(`/api/annotations/${encodeURIComponent(currentImageRef.current)}`, {
@@ -366,7 +549,7 @@ export default function AnnotatorPage() {
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
     const fabric = await import("fabric");
-    const img = await fabric.FabricImage.fromURL(`/raw/${filename}`);
+    const img = await fabric.FabricImage.fromURL(`/api/raw/${encodeURIComponent(filename)}`, { crossOrigin: "anonymous" });
     imageDims.current = { width: img.width || 800, height: img.height || 600 };
 
     const container = containerRef.current;
@@ -432,6 +615,35 @@ export default function AnnotatorPage() {
             strokeWidth: 2, strokeDashArray: [6, 4], selectable: false, evented: false,
           });
           tempRect.current = rect; canvas.add(rect);
+        } else if (tool === "ellipse") {
+          isDrawing.current = true;
+          drawStart.current = { x: pointer.x, y: pointer.y };
+          const ellipse = new fabric.Ellipse({
+            left: pointer.x, top: pointer.y, rx: 0, ry: 0,
+            fill: "transparent", stroke: getLabelColor(activeLabelRef.current),
+            strokeWidth: 2, strokeDashArray: [6, 4], selectable: false, evented: false,
+          });
+          // Reuse tempRect slot for the in-flight ellipse so mouse:move/up can touch it.
+          tempRect.current = ellipse; canvas.add(ellipse);
+        } else if (tool === "polyline") {
+          // Same click-to-add-vertex UX as polygon; double-click finishes.
+          polygonPoints.current.push([pointer.x, pointer.y]);
+          const dot = new fabric.Circle({
+            left: pointer.x - 3, top: pointer.y - 3, radius: 3,
+            fill: getLabelColor(activeLabelRef.current), stroke: "#fff", strokeWidth: 1,
+            selectable: false, evented: false,
+          });
+          canvas.add(dot); polygonDots.current.push(dot);
+          if (polygonPoints.current.length > 1) {
+            const pts = polygonPoints.current;
+            const prev = pts[pts.length - 2]; const curr = pts[pts.length - 1];
+            const line = new fabric.Line([prev[0], prev[1], curr[0], curr[1]], {
+              stroke: getLabelColor(activeLabelRef.current), strokeWidth: 2,
+              selectable: false, evented: false,
+            });
+            canvas.add(line); polygonLines.current.push(line);
+          }
+          canvas.renderAll();
         } else if (tool === "polygon") {
           polygonPoints.current.push([pointer.x, pointer.y]);
           const dot = new fabric.Circle({
@@ -484,7 +696,13 @@ export default function AnnotatorPage() {
         if (isDrawing.current && tempRect.current && drawStart.current) {
           const x = Math.min(drawStart.current.x, pointer.x);
           const y = Math.min(drawStart.current.y, pointer.y);
-          tempRect.current.set({ left: x, top: y, width: Math.abs(pointer.x - drawStart.current.x), height: Math.abs(pointer.y - drawStart.current.y) });
+          const w = Math.abs(pointer.x - drawStart.current.x);
+          const h = Math.abs(pointer.y - drawStart.current.y);
+          if (activeToolRef.current === "ellipse") {
+            tempRect.current.set({ left: x, top: y, rx: w / 2, ry: h / 2 });
+          } else {
+            tempRect.current.set({ left: x, top: y, width: w, height: h });
+          }
           canvas.renderAll();
         }
       });
@@ -502,17 +720,22 @@ export default function AnnotatorPage() {
         }
 
         if (isDrawing.current && tempRect.current && drawStart.current) {
-          const rect = tempRect.current;
-          const w = rect.width || 0; const h = rect.height || 0;
-          canvas.remove(rect); tempRect.current = null;
+          const shape = tempRect.current;
+          const tool = activeToolRef.current;
+          const isEllipse = tool === "ellipse";
+          const w = isEllipse ? (shape.rx || 0) * 2 : shape.width || 0;
+          const h = isEllipse ? (shape.ry || 0) * 2 : shape.height || 0;
+          canvas.remove(shape); tempRect.current = null;
           isDrawing.current = false; drawStart.current = null;
           if (w > 5 && h > 5) {
             undoStack.current.push(JSON.parse(JSON.stringify(annotationsRef.current)));
             redoStack.current = [];
             const ann: Annotation = {
-              id: uuidv4(), type: "bbox", label: activeLabelRef.current,
+              id: uuidv4(),
+              type: isEllipse ? "ellipse" : "bbox",
+              label: activeLabelRef.current,
               color: getLabelColor(activeLabelRef.current),
-              x: rect.left || 0, y: rect.top || 0, width: w, height: h,
+              x: shape.left || 0, y: shape.top || 0, width: w, height: h,
             };
             const newAnns = [...annotationsRef.current, ann];
             setAnnotations(newAnns); annotationsRef.current = newAnns;
@@ -522,14 +745,19 @@ export default function AnnotatorPage() {
         }
       });
 
-      // --- DOUBLE CLICK: finish polygon ---
+      // --- DOUBLE CLICK: finish polygon / polyline ---
       canvas.on("mouse:dblclick", () => {
-        if (activeToolRef.current === "polygon" && polygonPoints.current.length >= 3) {
+        const tool = activeToolRef.current;
+        const minPts = tool === "polyline" ? 2 : 3;
+        if ((tool === "polygon" || tool === "polyline") && polygonPoints.current.length >= minPts) {
           undoStack.current.push(JSON.parse(JSON.stringify(annotationsRef.current)));
           redoStack.current = [];
           const ann: Annotation = {
-            id: uuidv4(), type: "polygon", label: activeLabelRef.current,
-            color: getLabelColor(activeLabelRef.current), points: [...polygonPoints.current],
+            id: uuidv4(),
+            type: tool,
+            label: activeLabelRef.current,
+            color: getLabelColor(activeLabelRef.current),
+            points: [...polygonPoints.current],
           };
           for (const l of polygonLines.current) canvas.remove(l);
           for (const d of polygonDots.current) canvas.remove(d);
@@ -570,28 +798,55 @@ export default function AnnotatorPage() {
         const id = obj.annotationId;
         const type = obj.annotationType;
 
+        // Read the effective size BEFORE we reset scale below.
+        const effWidth = obj.width * obj.scaleX;
+        const effHeight = obj.height * obj.scaleY;
+
         const newAnns = annotationsRef.current.map((a) => {
           if (a.id !== id) return a;
           if (type === "bbox") {
-            return {
-              ...a,
-              x: obj.left,
-              y: obj.top,
-              width: obj.width * obj.scaleX,
-              height: obj.height * obj.scaleY,
-            };
+            return { ...a, x: obj.left, y: obj.top, width: effWidth, height: effHeight };
+          }
+          if (type === "ellipse") {
+            // Fabric Ellipse exposes rx/ry; width/height in state mirror the
+            // bounding rect so ellipses round-trip through save/load cleanly.
+            const rx = (obj.rx || 0) * obj.scaleX;
+            const ry = (obj.ry || 0) * obj.scaleY;
+            return { ...a, x: obj.left, y: obj.top, width: rx * 2, height: ry * 2 };
+          }
+          if (type === "keypoint") {
+            // The keypoint is rendered as a circle with radius 5 offset by -5,-5
+            // so the stored point is the circle's center.
+            return { ...a, x: (obj.left || 0) + 5, y: (obj.top || 0) + 5 };
+          }
+          if ((type === "polygon" || type === "polyline") && a.points) {
+            // Fabric polygon/polyline store points in local coords relative to
+            // pathOffset. Apply the transform matrix to recover scene coords.
+            // Rotation is locked so the matrix is translate + scale only.
+            const m = obj.calcTransformMatrix() as number[];
+            const ox = obj.pathOffset?.x || 0;
+            const oy = obj.pathOffset?.y || 0;
+            const pts: number[][] = obj.points.map((p: { x: number; y: number }) => {
+              const lx = p.x - ox;
+              const ly = p.y - oy;
+              return [m[0] * lx + m[2] * ly + m[4], m[1] * lx + m[3] * ly + m[5]];
+            });
+            return { ...a, points: pts };
           }
           return a;
         });
 
-        // Reset scale after reading dimensions
+        // Reset transform so subsequent edits work from a clean baseline.
         if (type === "bbox") {
-          obj.set({ scaleX: 1, scaleY: 1, width: obj.width * obj.scaleX, height: obj.height * obj.scaleY });
+          obj.set({ scaleX: 1, scaleY: 1, width: effWidth, height: effHeight });
+        } else if (type === "ellipse") {
+          obj.set({ scaleX: 1, scaleY: 1, rx: (obj.rx || 0) * obj.scaleX, ry: (obj.ry || 0) * obj.scaleY });
         }
 
         setAnnotations(newAnns); annotationsRef.current = newAnns;
         scheduleAutoSave(newAnns);
-        // Re-render to update label positions
+        // Re-render so label positions follow the moved/resized shape and
+        // polygon geometry is rebuilt from the updated points.
         setTimeout(() => renderAnnotations(newAnns, canvas), 50);
       });
 
@@ -629,7 +884,8 @@ export default function AnnotatorPage() {
     const c = fabricRef.current;
     if (!c) return;
     const cursorMap: Record<Tool, string> = {
-      select: "default", bbox: "crosshair", polygon: "crosshair", keypoint: "crosshair", pan: "grab",
+      select: "default", bbox: "crosshair", polygon: "crosshair", polyline: "crosshair",
+      ellipse: "crosshair", keypoint: "crosshair", pan: "grab",
     };
     c.defaultCursor = cursorMap[activeTool] || "default";
     c.selection = activeTool === "select";
@@ -725,7 +981,7 @@ export default function AnnotatorPage() {
         spaceHeld.current = false;
         const c = fabricRef.current;
         if (c) {
-          const cursorMap: Record<Tool, string> = { select: "default", bbox: "crosshair", polygon: "crosshair", keypoint: "crosshair", pan: "grab" };
+          const cursorMap: Record<Tool, string> = { select: "default", bbox: "crosshair", polygon: "crosshair", polyline: "crosshair", ellipse: "crosshair", keypoint: "crosshair", pan: "grab" };
           c.defaultCursor = cursorMap[activeToolRef.current] || "default";
           c.setCursor(c.defaultCursor);
         }
@@ -747,6 +1003,9 @@ export default function AnnotatorPage() {
         if (e.key === "z" && e.shiftKey) { e.preventDefault(); redo(); }
         if (e.key === "Z") { e.preventDefault(); redo(); }
         if (e.key === "s") { e.preventDefault(); saveNow(); }
+        if (e.key === "c" || e.key === "C") { e.preventDefault(); copySelected(); }
+        if (e.key === "v" || e.key === "V") { e.preventDefault(); pasteClipboard(); }
+        if (e.key === "d" || e.key === "D") { e.preventDefault(); duplicateSelected(); }
         if (e.key === "a") { e.preventDefault(); /* prevent select all */ }
         return;
       }
@@ -755,6 +1014,8 @@ export default function AnnotatorPage() {
         case "v": case "V": setActiveTool("select"); break;
         case "b": case "B": setActiveTool("bbox"); break;
         case "p": case "P": setActiveTool("polygon"); break;
+        case "l": case "L": setActiveTool("polyline"); break;
+        case "e": case "E": setActiveTool("ellipse"); break;
         case "k": case "K": setActiveTool("keypoint"); break;
         case "g": case "G": setActiveTool("pan"); break;
         case "Delete": case "Backspace": deleteSelected(); break;
@@ -780,7 +1041,7 @@ export default function AnnotatorPage() {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [undo, redo, saveNow, deleteSelected, goToImage, zoomIn, zoomOut, fitToView, toggleAnnotations, cancelPolygon, setStatus, labels, currentImage]);
+  }, [undo, redo, saveNow, deleteSelected, goToImage, zoomIn, zoomOut, fitToView, toggleAnnotations, cancelPolygon, setStatus, labels, currentImage, copySelected, pasteClipboard, duplicateSelected]);
 
   const statusColor = (s: ImageStatus) => {
     const map: Record<ImageStatus, string> = { unannotated: "bg-zinc-500", annotated: "bg-indigo-500", accepted: "bg-emerald-400", rejected: "bg-red-400" };
@@ -819,8 +1080,14 @@ export default function AnnotatorPage() {
       <div className="flex flex-1 min-h-0">
         {/* Left Sidebar */}
         <aside className="w-60 min-w-60 bg-[#161822] border-r border-[#2a2d3e] flex flex-col">
-          <div className="p-3 border-b border-[#2a2d3e]">
-            <h3 className="text-xs uppercase tracking-wider text-[#8688a0] mb-2 font-semibold">Images</h3>
+          <div className="p-3 border-b border-[#2a2d3e] space-y-2">
+            <h3 className="text-xs uppercase tracking-wider text-[#8688a0] font-semibold">Images</h3>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search filenames…"
+              className="w-full px-2 py-1.5 bg-[#1e2030] border border-[#2a2d3e] text-[#e0e0e6] rounded text-xs focus:border-indigo-500 focus:outline-none transition"
+            />
             <select value={filter} onChange={(e) => setFilter(e.target.value as ImageStatus | "all")} className="w-full px-2 py-1.5 bg-[#1e2030] border border-[#2a2d3e] text-[#e0e0e6] rounded text-xs">
               <option value="all">All</option>
               <option value="unannotated">Unannotated</option>
@@ -829,20 +1096,36 @@ export default function AnnotatorPage() {
               <option value="rejected">Rejected</option>
             </select>
           </div>
-          <div className="flex-1 overflow-y-auto p-1">
-            {images.map((img, idx) => (
-              <div key={img.filename} onClick={() => loadImage(img.filename)}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded cursor-pointer text-xs transition-colors ${currentImage === img.filename ? "bg-indigo-500 text-white" : "hover:bg-[#252840]"}`}>
-                <div className={`w-2 h-2 rounded-full shrink-0 ${statusColor(img.status)}`} />
-                <span className="flex-1 truncate" title={img.filename}>{img.filename}</span>
-                {img.annotationCount > 0 && (
-                  <span className={`text-[10px] px-1.5 rounded-lg font-semibold ${currentImage === img.filename ? "bg-white/20 text-white" : "bg-[#1e2030] text-[#8688a0]"}`}>{img.annotationCount}</span>
-                )}
-              </div>
-            ))}
-            {images.length === 0 && (
-              <div className="p-4 text-center text-[#8688a0] text-xs">No images found.<br />Drop images here or add to <code className="bg-[#1e2030] px-1 rounded">public/raw/</code></div>
-            )}
+          <div className="flex-1 overflow-y-auto p-1 sidebar-images-scroll">
+            {(() => {
+              const q = searchQuery.trim().toLowerCase();
+              const shown = q ? images.filter((i) => i.filename.toLowerCase().includes(q)) : images;
+              if (shown.length === 0) {
+                return images.length === 0 ? (
+                  <div className="p-4 text-center text-[#8688a0] text-xs">No images found.<br />Drop images here to upload to R2 <code className="bg-[#1e2030] px-1 rounded">raw/</code></div>
+                ) : (
+                  <div className="p-4 text-center text-[#8688a0] text-xs">No images match &ldquo;{searchQuery}&rdquo;</div>
+                );
+              }
+              return shown.map((img) => (
+                <div key={img.filename} onClick={() => loadImage(img.filename)}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-xs transition-colors ${currentImage === img.filename ? "bg-indigo-500 text-white" : "hover:bg-[#252840]"}`}>
+                  <ImageThumb filename={img.filename} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${statusColor(img.status)}`} />
+                      <span className="truncate" title={img.filename}>{img.filename}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`text-[9px] capitalize ${currentImage === img.filename ? "text-white/70" : "text-[#8688a0]"}`}>{img.status}</span>
+                      {img.annotationCount > 0 && (
+                        <span className={`text-[9px] px-1 rounded-lg font-semibold ${currentImage === img.filename ? "bg-white/20 text-white" : "bg-[#1e2030] text-[#8688a0]"}`}>{img.annotationCount} ann</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ));
+            })()}
           </div>
           <div className="p-3 border-t border-[#2a2d3e]">
             <div className="h-1 bg-[#1e2030] rounded-full overflow-hidden mb-1.5">
@@ -857,7 +1140,7 @@ export default function AnnotatorPage() {
           {/* Toolbar */}
           <div className="flex items-center gap-1 px-3 py-1.5 bg-[#161822] border-b border-[#2a2d3e]">
             <div className="flex gap-0.5 pr-2 border-r border-[#2a2d3e]">
-              {([["select", "V", "Select (V)"], ["bbox", "B", "Box (B)"], ["polygon", "P", "Polygon (P)"], ["keypoint", "K", "Keypoint (K)"], ["pan", "G", "Pan (G/Space)"]] as [Tool, string, string][]).map(([tool, key, title]) => (
+              {([["select", "V", "Select (V)"], ["bbox", "B", "Box (B)"], ["polygon", "P", "Polygon (P)"], ["polyline", "L", "Polyline (L)"], ["ellipse", "E", "Ellipse (E)"], ["keypoint", "K", "Keypoint (K)"], ["pan", "G", "Pan (G/Space)"]] as [Tool, string, string][]).map(([tool, key, title]) => (
                 <button key={tool} onClick={() => setActiveTool(tool)}
                   className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-colors ${activeTool === tool ? "bg-indigo-500 text-white" : "text-[#8688a0] hover:bg-[#252840] hover:text-[#e0e0e6]"}`}
                   title={title}>
@@ -917,7 +1200,7 @@ export default function AnnotatorPage() {
                   <svg viewBox="0 0 24 24" width="32" height="32" className="text-indigo-400"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" fill="currentColor"/></svg>
                 </div>
                 <h2 className="text-lg text-[#e0e0e6] font-semibold">No image loaded</h2>
-                <p className="text-sm">Drop images here or add to <code className="bg-[#1e2030] px-2 py-0.5 rounded font-mono text-xs">public/raw/</code></p>
+                <p className="text-sm">Drop images here to upload to R2 <code className="bg-[#1e2030] px-2 py-0.5 rounded font-mono text-xs">raw/</code></p>
               </div>
             )}
             {isDragOver && (
@@ -951,16 +1234,23 @@ export default function AnnotatorPage() {
               <span className="text-[10px] text-[#8688a0]">Press 1-9</span>
             </div>
             <div className="px-3 pb-2 flex flex-wrap gap-1">
-              {labels.map((l, idx) => (
-                <button key={l.name} onClick={() => { setActiveLabel(l.name); activeLabelRef.current = l.name; }}
-                  className={`group flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white transition-all ${activeLabel === l.name ? "ring-2 ring-white shadow-lg scale-105" : "hover:scale-105"}`}
-                  style={{ backgroundColor: l.color }}>
-                  <span className="text-[9px] px-1 rounded bg-black/30 font-mono">{idx + 1}</span>
-                  {l.name}
-                  <span onClick={(e) => { e.stopPropagation(); removeLabel(l.name); }}
-                    className="ml-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] bg-black/30 hover:bg-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">x</span>
-                </button>
-              ))}
+              {labels.map((l, idx) => {
+                const count = annotations.filter((a) => a.label === l.name).length;
+                return (
+                  <button key={l.name}
+                    onClick={() => { setActiveLabel(l.name); activeLabelRef.current = l.name; }}
+                    onDoubleClick={() => setLabelFilter(labelFilter === l.name ? null : l.name)}
+                    title={`Click to select, double-click to filter annotations by "${l.name}"`}
+                    className={`group flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold text-white transition-all ${activeLabel === l.name ? "ring-2 ring-white shadow-lg scale-105" : "hover:scale-105"} ${labelFilter === l.name ? "outline outline-2 outline-white/70" : ""}`}
+                    style={{ backgroundColor: l.color }}>
+                    <span className="text-[9px] px-1 rounded bg-black/30 font-mono">{idx + 1}</span>
+                    {l.name}
+                    {count > 0 && <span className="text-[9px] px-1 rounded bg-black/40 font-mono">{count}</span>}
+                    <span onClick={(e) => { e.stopPropagation(); removeLabel(l.name); }}
+                      className="ml-0.5 w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] bg-black/30 hover:bg-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">x</span>
+                  </button>
+                );
+              })}
             </div>
             <div className="flex gap-1.5 px-3 pb-3">
               <input value={newLabelName} onChange={(e) => setNewLabelName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addLabel()}
@@ -1006,6 +1296,7 @@ export default function AnnotatorPage() {
               {selectedAnnotation ? (() => {
                 const ann = annotations.find((a) => a.id === selectedAnnotation);
                 if (!ann) return <p className="text-xs text-[#8688a0]">Not found</p>;
+                const attrEntries = Object.entries(ann.attributes || {});
                 return (
                   <div className="space-y-1.5 text-xs">
                     <div className="flex justify-between"><span className="text-[#8688a0]">Type</span><span className="font-semibold capitalize px-2 py-0.5 rounded text-[10px]" style={{ backgroundColor: ann.color + "33", color: ann.color }}>{ann.type}</span></div>
@@ -1019,12 +1310,54 @@ export default function AnnotatorPage() {
                         {labels.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
                       </select>
                     </div>
-                    {ann.type === "bbox" && <>
+                    {(ann.type === "bbox" || ann.type === "ellipse") && <>
                       <div className="flex justify-between"><span className="text-[#8688a0]">Position</span><span className="font-mono text-[10px]">{Math.round(ann.x || 0)}, {Math.round(ann.y || 0)}</span></div>
                       <div className="flex justify-between"><span className="text-[#8688a0]">Size</span><span className="font-mono text-[10px]">{Math.round(ann.width || 0)} x {Math.round(ann.height || 0)}</span></div>
                     </>}
-                    {ann.type === "polygon" && <div className="flex justify-between"><span className="text-[#8688a0]">Vertices</span><span>{ann.points?.length || 0}</span></div>}
+                    {(ann.type === "polygon" || ann.type === "polyline") && <div className="flex justify-between"><span className="text-[#8688a0]">Vertices</span><span>{ann.points?.length || 0}</span></div>}
                     {ann.type === "keypoint" && <div className="flex justify-between"><span className="text-[#8688a0]">Position</span><span className="font-mono text-[10px]">{Math.round(ann.x || 0)}, {Math.round(ann.y || 0)}</span></div>}
+
+                    {/* Attributes editor: arbitrary k/v pairs, persisted per-annotation */}
+                    <div className="pt-2 border-t border-[#2a2d3e]">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-[#8688a0] font-semibold">Attributes</span>
+                        <span className="text-[10px] text-[#8688a0]">{attrEntries.length}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {attrEntries.map(([k, v]) => (
+                          <div key={k} className="flex items-center gap-1">
+                            <span className="text-[10px] text-[#8688a0] font-mono w-16 truncate" title={k}>{k}</span>
+                            <input value={v} onChange={(ev) => setAnnotationAttribute(ann.id, k, ev.target.value)}
+                              className="flex-1 px-1.5 py-0.5 bg-[#1e2030] border border-[#2a2d3e] rounded text-[10px] text-[#e0e0e6] focus:border-indigo-500 focus:outline-none" />
+                            <button onClick={() => setAnnotationAttribute(ann.id, k, null)}
+                              className="text-red-400 hover:text-red-300 text-sm leading-none w-4" title="Remove">&times;</button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-1 mt-1.5">
+                        <input value={attrDraftKey} onChange={(ev) => setAttrDraftKey(ev.target.value)} placeholder="key"
+                          className="flex-1 w-0 px-1.5 py-1 bg-[#1e2030] border border-[#2a2d3e] rounded text-[10px] text-[#e0e0e6] font-mono focus:border-indigo-500 focus:outline-none" />
+                        <input value={attrDraftVal} onChange={(ev) => setAttrDraftVal(ev.target.value)} placeholder="value"
+                          onKeyDown={(ev) => {
+                            if (ev.key === "Enter" && attrDraftKey.trim()) {
+                              setAnnotationAttribute(ann.id, attrDraftKey.trim(), attrDraftVal);
+                              setAttrDraftKey(""); setAttrDraftVal("");
+                            }
+                          }}
+                          className="flex-1 w-0 px-1.5 py-1 bg-[#1e2030] border border-[#2a2d3e] rounded text-[10px] text-[#e0e0e6] focus:border-indigo-500 focus:outline-none" />
+                        <button onClick={() => {
+                          if (!attrDraftKey.trim()) return;
+                          setAnnotationAttribute(ann.id, attrDraftKey.trim(), attrDraftVal);
+                          setAttrDraftKey(""); setAttrDraftVal("");
+                        }} className="px-2 py-1 bg-indigo-500 text-white rounded text-[10px] font-semibold hover:bg-indigo-400 transition">Add</button>
+                      </div>
+                    </div>
+
+                    {/* Copy / duplicate shortcuts for the selected annotation */}
+                    <div className="flex gap-1.5 pt-2">
+                      <button onClick={copySelected} className="flex-1 py-1 border border-[#2a2d3e] rounded text-[10px] font-semibold text-[#8688a0] hover:bg-[#252840] hover:text-[#e0e0e6] transition" title="Copy (Ctrl+C)">Copy</button>
+                      <button onClick={duplicateSelected} className="flex-1 py-1 border border-[#2a2d3e] rounded text-[10px] font-semibold text-[#8688a0] hover:bg-[#252840] hover:text-[#e0e0e6] transition" title="Duplicate (Ctrl+D)">Duplicate</button>
+                    </div>
                   </div>
                 );
               })() : <p className="text-xs text-[#8688a0]">Select an annotation to edit</p>}
@@ -1035,21 +1368,49 @@ export default function AnnotatorPage() {
           <div className="border-b border-[#2a2d3e]">
             <div className="flex items-center justify-between px-3 py-2.5">
               <h3 className="text-xs uppercase tracking-wider text-[#8688a0] font-semibold">Annotations</h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-lg bg-indigo-500 text-white font-semibold">{annotations.length}</span>
+              <div className="flex items-center gap-1.5">
+                {labelFilter && (
+                  <button onClick={() => setLabelFilter(null)}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 transition"
+                    title="Clear label filter">
+                    {labelFilter} &times;
+                  </button>
+                )}
+                <span className="text-[10px] px-2 py-0.5 rounded-lg bg-indigo-500 text-white font-semibold">{annotations.length}</span>
+              </div>
             </div>
             <div className="max-h-52 overflow-y-auto">
-              {annotations.map((ann) => (
+              {annotations
+                .filter((ann) => !labelFilter || ann.label === labelFilter)
+                .map((ann) => (
                 <div key={ann.id} onClick={() => setSelectedAnnotation(ann.id)}
-                  className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs transition-colors group ${selectedAnnotation === ann.id ? "bg-indigo-500 text-white" : "hover:bg-[#252840]"}`}>
+                  className={`flex items-center gap-1.5 px-3 py-1.5 cursor-pointer text-xs transition-colors group ${selectedAnnotation === ann.id ? "bg-indigo-500 text-white" : "hover:bg-[#252840]"} ${ann.hidden ? "opacity-40" : ""}`}>
                   <span className="w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center text-white shrink-0" style={{ backgroundColor: ann.color }}>
                     {ann.type[0].toUpperCase()}
                   </span>
                   <span className="flex-1 truncate">{ann.label}</span>
-                  <span onClick={(e) => { e.stopPropagation(); deleteAnnotation(ann.id); }}
-                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 cursor-pointer transition-opacity text-sm leading-none">x</span>
+                  {ann.attributes && Object.keys(ann.attributes).length > 0 && (
+                    <span className="text-[9px] px-1 rounded bg-[#1e2030] text-[#8688a0]" title="Has attributes">{Object.keys(ann.attributes).length}</span>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); toggleAnnotationFlag(ann.id, "hidden"); }}
+                    className={`w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 transition ${ann.hidden ? "text-red-400 opacity-100" : "text-[#8688a0] opacity-0 group-hover:opacity-100"}`}
+                    title={ann.hidden ? "Show" : "Hide"}>
+                    <svg viewBox="0 0 24 24" width="11" height="11"><path d={ann.hidden ? "M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2z" : "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"} fill="currentColor"/></svg>
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); toggleAnnotationFlag(ann.id, "locked"); }}
+                    className={`w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 transition ${ann.locked ? "text-amber-400 opacity-100" : "text-[#8688a0] opacity-0 group-hover:opacity-100"}`}
+                    title={ann.locked ? "Unlock" : "Lock"}>
+                    <svg viewBox="0 0 24 24" width="11" height="11"><path d={ann.locked ? "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z" : "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"} fill="currentColor"/></svg>
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteAnnotation(ann.id); }}
+                    className="w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition text-sm leading-none"
+                    title="Delete">&times;</button>
                 </div>
               ))}
               {annotations.length === 0 && <div className="px-3 py-4 text-center text-[#8688a0] text-xs">No annotations yet.<br />Select a tool and draw on the image.</div>}
+              {annotations.length > 0 && labelFilter && annotations.filter((a) => a.label === labelFilter).length === 0 && (
+                <div className="px-3 py-4 text-center text-[#8688a0] text-xs">No annotations with label <span className="font-mono">{labelFilter}</span>.</div>
+              )}
             </div>
           </div>
 
@@ -1151,13 +1512,13 @@ export default function AnnotatorPage() {
             <div className="p-5">
               <div className="grid grid-cols-2 gap-x-8 gap-y-1">
                 <h4 className="col-span-2 text-[10px] uppercase tracking-wider text-[#8688a0] font-semibold mb-1">Tools</h4>
-                {[["V","Select"],["B","Bounding Box"],["P","Polygon"],["K","Keypoint"],["G","Pan"],["Space","Hold to pan"]].map(([k,d])=>(
+                {[["V","Select"],["B","Bounding Box"],["P","Polygon"],["L","Polyline"],["E","Ellipse"],["K","Keypoint"],["G","Pan"],["Space","Hold to pan"]].map(([k,d])=>(
                   <div key={k} className="flex items-center gap-2 text-xs py-0.5">
                     <kbd className="inline-block px-2 py-0.5 bg-[#1e2030] border border-[#2a2d3e] rounded font-mono text-[10px] min-w-[32px] text-center">{k}</kbd><span>{d}</span>
                   </div>
                 ))}
                 <h4 className="col-span-2 text-[10px] uppercase tracking-wider text-[#8688a0] font-semibold mt-3 mb-1">Actions</h4>
-                {[["1-9","Quick label"],["Del","Delete"],["Ctrl+Z","Undo"],["Ctrl+Shift+Z","Redo"],["Ctrl+S","Save"],["Esc","Cancel / Select"]].map(([k,d])=>(
+                {[["1-9","Quick label"],["Del","Delete"],["Ctrl+Z","Undo"],["Ctrl+Shift+Z","Redo"],["Ctrl+S","Save"],["Ctrl+C","Copy annotation"],["Ctrl+V","Paste annotation"],["Ctrl+D","Duplicate"],["Esc","Cancel / Select"]].map(([k,d])=>(
                   <div key={k} className="flex items-center gap-2 text-xs py-0.5">
                     <kbd className="inline-block px-2 py-0.5 bg-[#1e2030] border border-[#2a2d3e] rounded font-mono text-[10px] min-w-[32px] text-center">{k}</kbd><span>{d}</span>
                   </div>

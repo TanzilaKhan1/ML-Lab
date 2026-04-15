@@ -4,5 +4,5 @@ import { exportCOCO } from "@/lib/storage";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(exportCOCO());
+  return NextResponse.json(await exportCOCO());
 }

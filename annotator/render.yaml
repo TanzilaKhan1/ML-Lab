@@ -1,0 +1,48 @@
+# Render Blueprint for the annotator Next.js app.
+#
+# Deploy:
+#   1. Push this repo to GitHub.
+#   2. In Render Dashboard → New → Blueprint, point at the repo.
+#   3. Fill in the R2 secrets (marked sync:false below) from the prompt.
+#   4. First deploy builds and boots automatically.
+#
+# Notes:
+#   - Storage is 100% R2, so no Persistent Disk is required.
+#   - Free tier works; upgrade the plan if you need more RAM/CPU.
+#   - Never commit real secrets to this file — sync:false forces manual entry.
+
+services:
+  - type: web
+    name: annotator
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    # Render injects PORT; Next.js' `next start` reads it automatically.
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+
+      # Cloudflare R2 — set these in the Render dashboard (sync:false).
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+
+      # Optional: override default prefixes (defaults: raw/, annotations/, exports/).
+      - key: R2_PREFIX_RAW
+        value: raw
+      - key: R2_PREFIX_ANNOTATIONS
+        value: annotations
+      - key: R2_PREFIX_EXPORTS
+        value: exports

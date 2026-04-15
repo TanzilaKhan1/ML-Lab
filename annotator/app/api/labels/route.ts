@@ -4,5 +4,5 @@ import { getAllLabels } from "@/lib/storage";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(getAllLabels());
+  return NextResponse.json(await getAllLabels());
 }

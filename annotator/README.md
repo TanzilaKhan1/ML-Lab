@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Annotator
 
-## Getting Started
+An image annotation workbench with R2-backed storage, bbox / polygon / polyline / ellipse / keypoint tools, per-image review (accept/reject), and COCO + YOLO exports.
 
-First, run the development server:
+## Stack
+- Next.js 16 (App Router) + React 19
+- Fabric.js 7 for the canvas
+- Cloudflare R2 (S3-compatible) via the AWS SDK v3 for persistence
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Folder layout
+```
+lib/r2.ts           # S3 client wrapper (server-only)
+lib/storage.ts      # Annotation domain helpers (async, R2-backed)
+app/api/*           # Route handlers for images, annotations, labels, stats, export
+app/api/raw/…       # Image proxy so R2 creds never ship to the browser
+scripts/seed-r2.mjs # One-shot uploader for existing images + JSON
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Inside the R2 bucket: `raw/`, `annotations/`, `exports/`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Local development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Copy `.env.example` to `.env.local` and fill in the R2 credentials.
+2. `npm install`
+3. `npm run seed` — uploads `public/raw/` + `annotations/` + `exports/` into R2 (idempotent).
+4. `npm run dev`, visit http://localhost:3000.
 
-## Learn More
+## Deploying to Render
 
-To learn more about Next.js, take a look at the following resources:
+This repo ships with a `render.yaml` Blueprint. To deploy:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push to GitHub (make sure `.env.local` is NOT committed — `.gitignore` already excludes `.env*`).
+2. In Render, go to **New → Blueprint** and point at the repo.
+3. Render reads `render.yaml` and provisions a web service.
+4. Fill in the five R2 secrets (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_ENDPOINT`) in the service's **Environment** tab. They are declared `sync: false` in the blueprint, so Render prompts for them.
+5. Trigger a deploy. The build runs `npm ci && npm run build`; boot uses `npm start`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Render injects `PORT` automatically; `next start` picks it up without extra config. The free plan works; upgrade if you need more RAM/CPU or want to avoid the cold-start penalty.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Keyboard shortcuts
+See the in-app "?" modal for the full list. Highlights: `V/B/P/L/E/K/G` (tools), `1-9` (quick label), `Arrow keys` (next/prev image), `Q/W` (accept/reject), `Ctrl+C/V/D` (copy/paste/duplicate), `Ctrl+Z` (undo), `F` (fit to view), `H` (toggle annotations).

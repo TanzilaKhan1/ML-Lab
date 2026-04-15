@@ -1,4 +1,4 @@
-export type AnnotationType = "bbox" | "polygon" | "keypoint";
+export type AnnotationType = "bbox" | "polygon" | "polyline" | "ellipse" | "keypoint";
 export type ImageStatus = "unannotated" | "annotated" | "accepted" | "rejected";
 
 export interface Annotation {
@@ -6,16 +6,17 @@ export interface Annotation {
   type: AnnotationType;
   label: string;
   color: string;
-  // bbox
+  // bbox / ellipse (x,y is top-left of the bounding rect; width/height span it)
   x?: number;
   y?: number;
   width?: number;
   height?: number;
-  // polygon
+  // polygon (closed) / polyline (open)
   points?: number[][];
-  // keypoint
-  // uses x, y from above
+  // keypoint uses x, y from above
   attributes?: Record<string, string>;
+  hidden?: boolean;
+  locked?: boolean;
 }
 
 export interface HistoryEntry {

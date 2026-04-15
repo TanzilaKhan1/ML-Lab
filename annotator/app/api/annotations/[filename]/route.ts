@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ filename: string }> }
 ) {
   const { filename } = await params;
-  return NextResponse.json(getAnnotation(decodeURIComponent(filename)));
+  return NextResponse.json(await getAnnotation(decodeURIComponent(filename)));
 }
 
 export async function POST(
@@ -19,7 +19,7 @@ export async function POST(
   const { filename } = await params;
   const body = await req.json();
   body.filename = decodeURIComponent(filename);
-  saveAnnotation(body);
+  await saveAnnotation(body);
   return NextResponse.json({ success: true });
 }
 
@@ -29,6 +29,6 @@ export async function PATCH(
 ) {
   const { filename } = await params;
   const body = await req.json();
-  updateStatus(decodeURIComponent(filename), body.status as ImageStatus, body.comment);
+  await updateStatus(decodeURIComponent(filename), body.status as ImageStatus, body.comment);
   return NextResponse.json({ success: true });
 }

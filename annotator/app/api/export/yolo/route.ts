@@ -4,5 +4,5 @@ import { exportYOLO } from "@/lib/storage";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(exportYOLO());
+  return NextResponse.json(await exportYOLO());
 }
