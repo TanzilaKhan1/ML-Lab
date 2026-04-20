@@ -102,7 +102,7 @@ export default function AnnotatorPage() {
   const [saveIndicator, setSaveIndicator] = useState("Auto-save ON");
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
-  const [opacity, setOpacity] = useState(70);
+  const [opacity, setOpacity] = useState(0);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -116,6 +116,8 @@ export default function AnnotatorPage() {
   const polygonPoints = useRef<number[][]>([]);
   const polygonLines = useRef<any[]>([]);
   const polygonDots = useRef<any[]>([]);
+  const polygonCloseLine = useRef<any>(null);
+  const polygonFirstDot = useRef<any>(null);
   const isDrawing = useRef(false);
   const drawStart = useRef<{ x: number; y: number } | null>(null);
   const tempRect = useRef<any>(null);
@@ -191,6 +193,7 @@ export default function AnnotatorPage() {
         const rect = new fabric.Rect({
           left: ann.x, top: ann.y, width: ann.width, height: ann.height,
           fill: ann.color + opacityHex, stroke: ann.color, strokeWidth: 2,
+          strokeUniform: true,
           selectable: interactive, evented: interactive,
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 8,
           transparentCorners: false, borderColor: ann.color,
@@ -212,6 +215,7 @@ export default function AnnotatorPage() {
         const ellipse = new fabric.Ellipse({
           left: ann.x, top: ann.y, rx, ry,
           fill: ann.color + opacityHex, stroke: ann.color, strokeWidth: 2,
+          strokeUniform: true,
           selectable: interactive, evented: interactive,
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 8,
           transparentCorners: false, borderColor: ann.color,
@@ -231,11 +235,21 @@ export default function AnnotatorPage() {
         const points = ann.points.map((p: number[]) => new fabric.Point(p[0], p[1]));
         const polygon = new fabric.Polygon(points, {
           fill: ann.color + opacityHex, stroke: ann.color, strokeWidth: 2,
+          strokeUniform: true,
           selectable: interactive, evented: interactive,
           lockRotation: true,
+          objectCaching: false,
+          cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 9,
+          transparentCorners: false, borderColor: ann.color,
+          cornerStyle: "circle",
         });
         (polygon as any).annotationId = ann.id;
         (polygon as any).annotationType = "polygon";
+        // Per-vertex controls — drag any vertex directly. Replaces default
+        // scale/rotate corners, which are unhelpful for annotation work.
+        if (interactive) {
+          polygon.controls = (fabric as any).controlsUtils.createPolyControls(polygon);
+        }
         const bounds = polygon.getBoundingRect();
         const text = new fabric.FabricText(ann.label, {
           left: bounds.left + 2, top: bounds.top - 20,
@@ -249,11 +263,19 @@ export default function AnnotatorPage() {
         const points = ann.points.map((p: number[]) => new fabric.Point(p[0], p[1]));
         const polyline = new fabric.Polyline(points, {
           fill: "transparent", stroke: ann.color, strokeWidth: 3,
+          strokeUniform: true,
           selectable: interactive, evented: interactive,
           lockRotation: true,
+          objectCaching: false,
+          cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 9,
+          transparentCorners: false, borderColor: ann.color,
+          cornerStyle: "circle",
         });
         (polyline as any).annotationId = ann.id;
         (polyline as any).annotationType = "polyline";
+        if (interactive) {
+          polyline.controls = (fabric as any).controlsUtils.createPolyControls(polyline);
+        }
         const bounds = polyline.getBoundingRect();
         const text = new fabric.FabricText(ann.label, {
           left: bounds.left + 2, top: bounds.top - 20,
@@ -268,16 +290,26 @@ export default function AnnotatorPage() {
         const outerCircle = new fabric.Circle({
           left: (ann.x || 0) - 10, top: (ann.y || 0) - 10, radius: 10,
           fill: "transparent", stroke: ann.color, strokeWidth: 2,
+          strokeUniform: true,
           selectable: false, evented: false,
         });
-        // Inner dot
+        // Inner dot — the hit target for dragging. Offset -4 with r=4 so its
+        // visual center is exactly on (ann.x, ann.y).
         const circle = new fabric.Circle({
-          left: (ann.x || 0) - 5, top: (ann.y || 0) - 5, radius: 5,
-          fill: ann.color, stroke: "#fff", strokeWidth: 2,
+          left: (ann.x || 0) - 4, top: (ann.y || 0) - 4, radius: 4,
+          fill: ann.color, stroke: "#fff", strokeWidth: 1,
+          strokeUniform: true,
           selectable: interactive, evented: interactive,
         });
         (circle as any).annotationId = ann.id;
         (circle as any).annotationType = "keypoint";
+        // 1px white center marker — the exact annotated pixel.
+        const center = new fabric.Circle({
+          left: (ann.x || 0) - 1, top: (ann.y || 0) - 1, radius: 1,
+          fill: "#fff", strokeWidth: 0,
+          selectable: false, evented: false,
+        });
+        (center as any).isLabel = true;
         const text = new fabric.FabricText(ann.label, {
           left: (ann.x || 0) + 14, top: (ann.y || 0) - 8,
           fontSize: 11, fill: "#fff", backgroundColor: ann.color + "DD",
@@ -285,7 +317,7 @@ export default function AnnotatorPage() {
           fontFamily: "Inter, sans-serif",
         });
         (text as any).isLabel = true;
-        c.add(outerCircle); c.add(circle); c.add(text);
+        c.add(outerCircle); c.add(circle); c.add(center); c.add(text);
       }
     }
     c.renderAll();
@@ -588,6 +620,36 @@ export default function AnnotatorPage() {
       });
       fabricRef.current = canvas;
 
+      // Finalize an in-progress polygon or polyline. Extracted because it runs
+      // from dblclick, Enter key, and click-near-first-point.
+      const finalizePolyShape = (tool: "polygon" | "polyline") => {
+        const minPts = tool === "polyline" ? 2 : 3;
+        if (polygonPoints.current.length < minPts) return false;
+        undoStack.current.push(JSON.parse(JSON.stringify(annotationsRef.current)));
+        redoStack.current = [];
+        const ann: Annotation = {
+          id: uuidv4(),
+          type: tool,
+          label: activeLabelRef.current,
+          color: getLabelColor(activeLabelRef.current),
+          points: [...polygonPoints.current],
+        };
+        for (const l of polygonLines.current) canvas.remove(l);
+        for (const d of polygonDots.current) canvas.remove(d);
+        if (polygonCloseLine.current) canvas.remove(polygonCloseLine.current);
+        polygonPoints.current = [];
+        polygonLines.current = [];
+        polygonDots.current = [];
+        polygonCloseLine.current = null;
+        polygonFirstDot.current = null;
+        const newAnns = [...annotationsRef.current, ann];
+        setAnnotations(newAnns); annotationsRef.current = newAnns;
+        renderAnnotations(newAnns, canvas);
+        scheduleAutoSave(newAnns);
+        return true;
+      };
+      (canvas as any).__finalizePolyShape = finalizePolyShape;
+
       // --- MOUSE DOWN ---
       canvas.on("mouse:down", (opt: any) => {
         const tool = activeToolRef.current;
@@ -612,7 +674,8 @@ export default function AnnotatorPage() {
           const rect = new fabric.Rect({
             left: pointer.x, top: pointer.y, width: 0, height: 0,
             fill: "transparent", stroke: getLabelColor(activeLabelRef.current),
-            strokeWidth: 2, strokeDashArray: [6, 4], selectable: false, evented: false,
+            strokeWidth: 2, strokeDashArray: [6, 4], strokeUniform: true,
+            selectable: false, evented: false,
           });
           tempRect.current = rect; canvas.add(rect);
         } else if (tool === "ellipse") {
@@ -621,7 +684,8 @@ export default function AnnotatorPage() {
           const ellipse = new fabric.Ellipse({
             left: pointer.x, top: pointer.y, rx: 0, ry: 0,
             fill: "transparent", stroke: getLabelColor(activeLabelRef.current),
-            strokeWidth: 2, strokeDashArray: [6, 4], selectable: false, evented: false,
+            strokeWidth: 2, strokeDashArray: [6, 4], strokeUniform: true,
+            selectable: false, evented: false,
           });
           // Reuse tempRect slot for the in-flight ellipse so mouse:move/up can touch it.
           tempRect.current = ellipse; canvas.add(ellipse);
@@ -639,25 +703,45 @@ export default function AnnotatorPage() {
             const prev = pts[pts.length - 2]; const curr = pts[pts.length - 1];
             const line = new fabric.Line([prev[0], prev[1], curr[0], curr[1]], {
               stroke: getLabelColor(activeLabelRef.current), strokeWidth: 2,
+              strokeUniform: true,
               selectable: false, evented: false,
             });
             canvas.add(line); polygonLines.current.push(line);
           }
           canvas.renderAll();
         } else if (tool === "polygon") {
+          // If we already have 3+ vertices and the click is near the first one,
+          // auto-close the polygon.
+          const pts = polygonPoints.current;
+          if (pts.length >= 3) {
+            const first = pts[0];
+            const dx = pointer.x - first[0];
+            const dy = pointer.y - first[1];
+            const threshold = 10 / Math.max(canvas.getZoom(), 0.1);
+            if (dx * dx + dy * dy < threshold * threshold) {
+              finalizePolyShape("polygon");
+              return;
+            }
+          }
           polygonPoints.current.push([pointer.x, pointer.y]);
+          const isFirst = polygonPoints.current.length === 1;
           const dot = new fabric.Circle({
-            left: pointer.x - 4, top: pointer.y - 4, radius: 4,
-            fill: getLabelColor(activeLabelRef.current), stroke: "#fff", strokeWidth: 1,
+            left: pointer.x - (isFirst ? 6 : 4), top: pointer.y - (isFirst ? 6 : 4),
+            radius: isFirst ? 6 : 4,
+            fill: getLabelColor(activeLabelRef.current),
+            stroke: "#fff", strokeWidth: isFirst ? 2 : 1,
+            strokeUniform: true,
             selectable: false, evented: false,
           });
           canvas.add(dot); polygonDots.current.push(dot);
+          if (isFirst) polygonFirstDot.current = dot;
           if (polygonPoints.current.length > 1) {
-            const pts = polygonPoints.current;
-            const prev = pts[pts.length - 2]; const curr = pts[pts.length - 1];
+            const allPts = polygonPoints.current;
+            const prev = allPts[allPts.length - 2]; const curr = allPts[allPts.length - 1];
             const line = new fabric.Line([prev[0], prev[1], curr[0], curr[1]], {
               stroke: getLabelColor(activeLabelRef.current), strokeWidth: 2,
-              strokeDashArray: [4, 4], selectable: false, evented: false,
+              strokeDashArray: [4, 4], strokeUniform: true,
+              selectable: false, evented: false,
             });
             canvas.add(line); polygonLines.current.push(line);
           }
@@ -705,6 +789,42 @@ export default function AnnotatorPage() {
           }
           canvas.renderAll();
         }
+
+        // In-progress polygon: update the "rubber band" line from last placed
+        // vertex to the cursor, plus (for polygon only) a closing-preview line
+        // from last vertex back to the first. Highlight the first dot when the
+        // cursor is close enough to close.
+        const activeTool = activeToolRef.current;
+        if ((activeTool === "polygon" || activeTool === "polyline") && polygonPoints.current.length >= 1) {
+          const pts = polygonPoints.current;
+          const last = pts[pts.length - 1];
+          const first = pts[0];
+          if (!polygonCloseLine.current) {
+            const line = new fabric.Line([last[0], last[1], pointer.x, pointer.y], {
+              stroke: getLabelColor(activeLabelRef.current), strokeWidth: 1,
+              strokeDashArray: [2, 4], strokeUniform: true,
+              selectable: false, evented: false,
+            });
+            polygonCloseLine.current = line;
+            canvas.add(line);
+          } else {
+            polygonCloseLine.current.set({ x1: last[0], y1: last[1], x2: pointer.x, y2: pointer.y });
+          }
+          // Close-snap feedback on the first dot (polygon only, needs >=3 pts).
+          if (activeTool === "polygon" && pts.length >= 3 && polygonFirstDot.current) {
+            const dx = pointer.x - first[0];
+            const dy = pointer.y - first[1];
+            const threshold = 10 / Math.max(canvas.getZoom(), 0.1);
+            const near = dx * dx + dy * dy < threshold * threshold;
+            polygonFirstDot.current.set({
+              radius: near ? 8 : 6,
+              left: first[0] - (near ? 8 : 6),
+              top: first[1] - (near ? 8 : 6),
+              strokeWidth: near ? 3 : 2,
+            });
+          }
+          canvas.requestRenderAll();
+        }
       });
 
       // --- MOUSE UP ---
@@ -748,24 +868,8 @@ export default function AnnotatorPage() {
       // --- DOUBLE CLICK: finish polygon / polyline ---
       canvas.on("mouse:dblclick", () => {
         const tool = activeToolRef.current;
-        const minPts = tool === "polyline" ? 2 : 3;
-        if ((tool === "polygon" || tool === "polyline") && polygonPoints.current.length >= minPts) {
-          undoStack.current.push(JSON.parse(JSON.stringify(annotationsRef.current)));
-          redoStack.current = [];
-          const ann: Annotation = {
-            id: uuidv4(),
-            type: tool,
-            label: activeLabelRef.current,
-            color: getLabelColor(activeLabelRef.current),
-            points: [...polygonPoints.current],
-          };
-          for (const l of polygonLines.current) canvas.remove(l);
-          for (const d of polygonDots.current) canvas.remove(d);
-          polygonPoints.current = []; polygonLines.current = []; polygonDots.current = [];
-          const newAnns = [...annotationsRef.current, ann];
-          setAnnotations(newAnns); annotationsRef.current = newAnns;
-          renderAnnotations(newAnns, canvas);
-          scheduleAutoSave(newAnns);
+        if (tool === "polygon" || tool === "polyline") {
+          finalizePolyShape(tool);
         }
       });
 
@@ -815,9 +919,8 @@ export default function AnnotatorPage() {
             return { ...a, x: obj.left, y: obj.top, width: rx * 2, height: ry * 2 };
           }
           if (type === "keypoint") {
-            // The keypoint is rendered as a circle with radius 5 offset by -5,-5
-            // so the stored point is the circle's center.
-            return { ...a, x: (obj.left || 0) + 5, y: (obj.top || 0) + 5 };
+            // Inner dot is r=4 offset by -4,-4; stored point is its center.
+            return { ...a, x: (obj.left || 0) + 4, y: (obj.top || 0) + 4 };
           }
           if ((type === "polygon" || type === "polyline") && a.points) {
             // Fabric polygon/polyline store points in local coords relative to
@@ -934,7 +1037,12 @@ export default function AnnotatorPage() {
     const c = fabricRef.current; if (!c) return;
     for (const l of polygonLines.current) c.remove(l);
     for (const d of polygonDots.current) c.remove(d);
-    polygonPoints.current = []; polygonLines.current = []; polygonDots.current = [];
+    if (polygonCloseLine.current) c.remove(polygonCloseLine.current);
+    polygonPoints.current = [];
+    polygonLines.current = [];
+    polygonDots.current = [];
+    polygonCloseLine.current = null;
+    polygonFirstDot.current = null;
     c.renderAll();
   }, []);
 
@@ -1018,7 +1126,28 @@ export default function AnnotatorPage() {
         case "e": case "E": setActiveTool("ellipse"); break;
         case "k": case "K": setActiveTool("keypoint"); break;
         case "g": case "G": setActiveTool("pan"); break;
-        case "Delete": case "Backspace": deleteSelected(); break;
+        case "Delete": case "Backspace": {
+          const tool = activeToolRef.current;
+          const c = fabricRef.current;
+          // During polygon/polyline drawing, step back one vertex instead of
+          // deleting the whole annotation.
+          if (c && (tool === "polygon" || tool === "polyline") && polygonPoints.current.length > 0) {
+            e.preventDefault();
+            polygonPoints.current.pop();
+            const lastLine = polygonLines.current.pop();
+            if (lastLine) c.remove(lastLine);
+            const lastDot = polygonDots.current.pop();
+            if (lastDot) c.remove(lastDot);
+            if (polygonPoints.current.length === 0) {
+              if (polygonCloseLine.current) { c.remove(polygonCloseLine.current); polygonCloseLine.current = null; }
+              polygonFirstDot.current = null;
+            }
+            c.requestRenderAll();
+          } else {
+            deleteSelected();
+          }
+          break;
+        }
         case "n": e.preventDefault(); goToImage("next"); break;
         case "N": e.preventDefault(); goToImage("prev"); break;
         case "ArrowRight": e.preventDefault(); goToImage("next"); break;
@@ -1028,6 +1157,15 @@ export default function AnnotatorPage() {
         case "f": case "F": fitToView(); break;
         case "h": case "H": toggleAnnotations(); break;
         case "Escape": cancelPolygon(); setActiveTool("select"); break;
+        case "Enter": {
+          const c = fabricRef.current;
+          const tool = activeToolRef.current;
+          if (c && (tool === "polygon" || tool === "polyline") && polygonPoints.current.length > 0) {
+            e.preventDefault();
+            (c as any).__finalizePolyShape?.(tool);
+          }
+          break;
+        }
         case "q": case "Q": if (currentImage) setStatus("accepted"); break;
         case "w": case "W": if (currentImage) setStatus("rejected"); break;
         default: {
@@ -1283,7 +1421,7 @@ export default function AnnotatorPage() {
                     className="flex-1 h-1 accent-indigo-500" />
                   <span className="w-8 text-right text-[#8688a0] font-mono text-[10px]">{opacity}%</span>
                 </div>
-                <button onClick={() => { setBrightness(100); setContrast(100); setOpacity(70); opacityRef.current = 70; renderAnnotations(annotations); }}
+                <button onClick={() => { setBrightness(100); setContrast(100); setOpacity(0); opacityRef.current = 0; renderAnnotations(annotations); }}
                   className="text-[10px] text-indigo-400 hover:text-indigo-300 transition">Reset adjustments</button>
               </div>
             </div>
