@@ -1510,7 +1510,7 @@ export default function AnnotatorPage() {
 
       <div className="flex flex-1 min-h-0">
         {/* Left: image list */}
-        <aside className="w-64 min-w-64 bg-sidebar border-r flex flex-col">
+        <aside className="w-64 min-w-64 bg-sidebar border-r flex flex-col overflow-hidden">
           <div className="p-3 border-b space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Images</h3>
