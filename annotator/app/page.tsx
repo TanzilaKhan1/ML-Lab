@@ -110,11 +110,11 @@ function anyModalOpen(): boolean {
 }
 
 const DEFAULT_LABELS: LabelDef[] = [
-  { name: "object", color: "#FF6B6B" },
-  { name: "person", color: "#4ECDC4" },
-  { name: "vehicle", color: "#45B7D1" },
-  { name: "animal", color: "#96CEB4" },
-  { name: "text", color: "#FFEAA7" },
+  { name: "safe",    color: "#82E0AA" },
+  { name: "unsafe",  color: "#FF6B6B" },
+  { name: "license", color: "#DDA0DD" },
+  { name: "person",  color: "#4ECDC4" },
+  { name: "text",    color: "#FFEAA7" },
 ];
 
 const LABEL_COLORS = [
