@@ -355,17 +355,68 @@ export default function AnnotatorPage() {
       if (ann.type === "bbox") {
         const rect = new fabric.Rect({
           left: ann.x, top: ann.y, width: ann.width, height: ann.height,
+          angle: ann.angle || 0,
           fill: ann.color + opacityHex, stroke: ann.color, strokeWidth: 2,
           strokeUniform: true,
           selectable: interactive, evented: interactive,
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 8,
           transparentCorners: false, borderColor: ann.color,
-          lockRotation: true,
+          lockRotation: false,
         });
+        // Make the rotation handle clearly visible: a larger circle rendered
+        // 44px above the top-center of the bounding box.
+        if (interactive) {
+          (rect as any).controls = {
+            ...(rect as any).controls,
+            mtr: new (fabric as any).Control({
+              x: 0,
+              y: -0.5,
+              offsetY: -44,
+              withConnection: true,
+              actionName: "rotate",
+              cursorStyle: "crosshair",
+              actionHandler: (fabric as any).controlsUtils.rotationWithSnapping,
+              render: (ctx: CanvasRenderingContext2D, left: number, top: number) => {
+                const size = 18;
+                ctx.save();
+                ctx.translate(left, top);
+                ctx.beginPath();
+                ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+                ctx.fillStyle = "#fff";
+                ctx.fill();
+                ctx.strokeStyle = ann.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                // draw a small rotation arrow arc
+                ctx.beginPath();
+                ctx.arc(0, 0, 4, -Math.PI * 0.75, Math.PI * 0.25);
+                ctx.strokeStyle = ann.color;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                // arrowhead
+                ctx.beginPath();
+                ctx.moveTo(3, -3);
+                ctx.lineTo(5, -1);
+                ctx.lineTo(2, 0);
+                ctx.closePath();
+                ctx.fillStyle = ann.color;
+                ctx.fill();
+                ctx.restore();
+              },
+            }),
+          };
+        }
         (rect as any).annotationId = ann.id;
         (rect as any).annotationType = "bbox";
+        // Place the label at local (2, -20) relative to the rect's top-left
+        // origin, then rotate by the same angle so it hugs the top edge.
+        const angle = ann.angle || 0;
+        const rad = (angle * Math.PI) / 180;
+        const lx = 2, ly = -20;
+        const textLeft = (ann.x || 0) + lx * Math.cos(rad) - ly * Math.sin(rad);
+        const textTop  = (ann.y || 0) + lx * Math.sin(rad) + ly * Math.cos(rad);
         const text = new fabric.FabricText(ann.label, {
-          left: (ann.x || 0) + 2, top: (ann.y || 0) - 20,
+          left: textLeft, top: textTop, angle,
           fontSize: 12, fill: "#fff", backgroundColor: ann.color + "DD",
           padding: 3, selectable: false, evented: false,
           fontFamily: "Inter, sans-serif",
@@ -662,6 +713,19 @@ export default function AnnotatorPage() {
       scheduleAutoSave(newAnns);
     },
     [scheduleAutoSave],
+  );
+
+  const setAnnotationAngle = useCallback(
+    (id: string, angle: number) => {
+      pushUndo();
+      const normalized = ((angle % 360) + 360) % 360;
+      const newAnns = annotationsRef.current.map((a) =>
+        a.id === id ? { ...a, angle: normalized } : a,
+      );
+      setAnnotations(newAnns); annotationsRef.current = newAnns;
+      renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
+    },
+    [pushUndo, renderAnnotations, scheduleAutoSave],
   );
 
   /**
@@ -1185,7 +1249,9 @@ export default function AnnotatorPage() {
         const newAnns = annotationsRef.current.map((a) => {
           if (a.id !== id) return a;
           if (type === "bbox") {
-            return { ...a, x: obj.left, y: obj.top, width: effWidth, height: effHeight };
+            // Normalise angle to [0, 360) so it never grows unbounded.
+            const angle = ((obj.angle || 0) % 360 + 360) % 360;
+            return { ...a, x: obj.left, y: obj.top, width: effWidth, height: effHeight, angle };
           }
           if (type === "ellipse") {
             const rx = (obj.rx || 0) * obj.scaleX;
@@ -1921,8 +1987,8 @@ export default function AnnotatorPage() {
         </section>
 
         {/* Right: labels / properties / annotations / review */}
-        <aside className="w-80 min-w-80 bg-sidebar border-l flex flex-col">
-          <ScrollArea className="flex-1">
+        <aside className="w-80 min-w-80 bg-sidebar border-l flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
             <LabelsPanel
               labels={labels}
               annotations={annotations}
@@ -1968,6 +2034,7 @@ export default function AnnotatorPage() {
                 renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
               }}
               onSetAttribute={setAnnotationAttribute}
+              onRotate={setAnnotationAngle}
               onCopy={copySelected}
               onDuplicate={duplicateSelected}
             />
@@ -1994,7 +2061,7 @@ export default function AnnotatorPage() {
               }}
               onStatus={setStatus}
             />
-          </ScrollArea>
+          </div>
         </aside>
         </div>
       </SidebarInset>

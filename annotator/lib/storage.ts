@@ -256,12 +256,36 @@ export async function getAllLabels(): Promise<string[]> {
 }
 
 /**
+ * Tight axis-aligned bounding box of a bbox that may be rotated.
+ * The rect is positioned at (x, y) (top-left) with size (w, h) and rotated
+ * by `angle` degrees clockwise around (x, y).
+ */
+function rotatedBboxAabb(x: number, y: number, w: number, h: number, angle: number): [number, number, number, number] {
+  if (!angle) return [x, y, w, h];
+  const rad = (angle * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const corners = [
+    [x, y],
+    [x + w * cos,         y + w * sin],
+    [x + w * cos - h * sin, y + w * sin + h * cos],
+    [x - h * sin,         y + h * cos],
+  ];
+  const xs = corners.map((c) => c[0]);
+  const ys = corners.map((c) => c[1]);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...xs), maxY = Math.max(...ys);
+  return [minX, minY, maxX - minX, maxY - minY];
+}
+
+/**
  * Derive an axis-aligned [x, y, w, h] bounding box suitable for YOLO export.
  * Returns null if the shape has no meaningful 2D extent (e.g. keypoint).
  */
 function deriveYoloBox(ann: import("./types").Annotation): [number, number, number, number] | null {
   if ((ann.type === "bbox" || ann.type === "ellipse") && ann.x != null && ann.y != null && ann.width && ann.height) {
-    return [ann.x, ann.y, ann.width, ann.height];
+    // Rotated bbox → use tight AABB of rotated corners so the YOLO rect
+    // actually covers the visible shape.
+    return rotatedBboxAabb(ann.x, ann.y, ann.width, ann.height, ann.angle || 0);
   }
   if ((ann.type === "polygon" || ann.type === "polyline") && ann.points && ann.points.length > 0) {
     const xs = ann.points.map((p) => p[0]);
@@ -342,8 +366,22 @@ export async function exportCOCO() {
       }
 
       if (ann.type === "bbox") {
-        cocoAnn.bbox = [ann.x, ann.y, ann.width, ann.height];
-        cocoAnn.area = (ann.width || 0) * (ann.height || 0);
+        const angle = ann.angle || 0;
+        if (angle) {
+          // Tight AABB covering the rotated rect; original params kept in attrs
+          // so consumers that understand rotation can reconstruct exactly.
+          const [bx, by, bw, bh] = rotatedBboxAabb(ann.x || 0, ann.y || 0, ann.width || 0, ann.height || 0, angle);
+          cocoAnn.bbox = [bx, by, bw, bh];
+          cocoAnn.area = (ann.width || 0) * (ann.height || 0); // un-rotated rect area
+          cocoAnn.attributes = {
+            ...(cocoAnn.attributes as object | undefined),
+            rotation: angle,
+            original_bbox: [ann.x, ann.y, ann.width, ann.height],
+          };
+        } else {
+          cocoAnn.bbox = [ann.x, ann.y, ann.width, ann.height];
+          cocoAnn.area = (ann.width || 0) * (ann.height || 0);
+        }
       } else if (ann.type === "ellipse") {
         // COCO has no native ellipse; store bbox and mark shape in attributes.
         cocoAnn.bbox = [ann.x, ann.y, ann.width, ann.height];

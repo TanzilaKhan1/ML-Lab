@@ -11,6 +11,8 @@ export interface Annotation {
   y?: number;
   width?: number;
   height?: number;
+  /** Rotation in degrees (clockwise). Only meaningful for bbox; defaults to 0. */
+  angle?: number;
   // polygon (closed) / polyline (open)
   points?: number[][];
   // keypoint uses x, y from above

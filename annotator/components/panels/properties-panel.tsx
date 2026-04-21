@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Copy, CopyPlus, X } from "lucide-react";
+import { Copy, CopyPlus, X, RotateCcw } from "lucide-react";
 import type { Annotation, LabelDef } from "@/lib/types";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -33,6 +33,7 @@ export function PropertiesPanel({
   onAttrDraftVal,
   onChangeLabel,
   onSetAttribute,
+  onRotate,
   onCopy,
   onDuplicate,
 }: {
@@ -45,6 +46,7 @@ export function PropertiesPanel({
   onAttrDraftVal: (v: string) => void;
   onChangeLabel: (id: string, newLabel: string) => void;
   onSetAttribute: (id: string, key: string, value: string | null) => void;
+  onRotate: (id: string, angle: number) => void;
   onCopy: () => void;
   onDuplicate: () => void;
 }) {
@@ -91,6 +93,24 @@ export function PropertiesPanel({
                         {Math.round(ann.width || 0)} × {Math.round(ann.height || 0)}
                       </span>
                     </Row>
+                    {ann.type === "bbox" && (
+                      <Row label="Rotation">
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono tabular-nums text-[11px]">
+                            {Math.round(ann.angle || 0)}°
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => onRotate(ann.id, 0)}
+                            title="Reset rotation to 0°"
+                            disabled={!(ann.angle || 0)}
+                          >
+                            <RotateCcw />
+                          </Button>
+                        </div>
+                      </Row>
+                    )}
                   </>
                 )}
                 {(ann.type === "polygon" || ann.type === "polyline") && (
