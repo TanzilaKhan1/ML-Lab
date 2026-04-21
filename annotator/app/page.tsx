@@ -271,6 +271,44 @@ export default function AnnotatorPage() {
   useEffect(() => { reviewHistoryRef.current = reviewHistory; }, [reviewHistory]);
   useEffect(() => { imageStatusRef.current = imageStatus; }, [imageStatus]);
 
+  // Flush the current image's state immediately when the tab is closed or hidden.
+  // Uses keepalive so the request survives page unload.
+  // All reads go through refs so the effect never needs to re-register.
+  useEffect(() => {
+    const flush = () => {
+      const filename = currentImageRef.current;
+      if (!filename) return;
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      const s = imageStatusRef.current;
+      fetch(`/api/annotations/${encodeFilePath(filename)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          filename,
+          annotations: annotationsRef.current,
+          labels: labelsRef.current,
+          status: s === "accepted" || s === "rejected" ? s : annotationsRef.current.length > 0 ? "annotated" : "unannotated",
+          reviewComment: reviewCommentRef.current,
+          history: reviewHistoryRef.current,
+          imageWidth: imageDims.current.width,
+          imageHeight: imageDims.current.height,
+        }),
+      }).catch(() => {});
+    };
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // refs only — intentionally empty deps
+
   const fetchImages = useCallback(async () => {
     const res = await fetch(`/api/images?filter=${filter}`);
     setImages(await res.json());
