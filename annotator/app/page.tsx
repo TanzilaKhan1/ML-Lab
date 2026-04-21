@@ -72,6 +72,14 @@ import { PropertiesPanel } from "@/components/panels/properties-panel";
 
 type Tool = "select" | "bbox" | "polygon" | "polyline" | "ellipse" | "keypoint" | "pan";
 
+/** Encode each path segment without encoding the separating slashes. */
+function encodeFilePath(filename: string): string {
+  return filename.split("/").map(encodeURIComponent).join("/");
+}
+
+const UPLOAD_FOLDERS = ["bus/positive", "bus/negative", "legua/positive", "legua/negative"] as const;
+type UploadFolder = (typeof UPLOAD_FOLDERS)[number];
+
 /** Undo/redo snapshots now cover annotations AND labels, so label add/delete
  *  and color changes round-trip through undo. */
 type Snapshot = { annotations: Annotation[]; labels: LabelDef[] };
@@ -148,7 +156,7 @@ function ImageThumb({ filename }: { filename: string }) {
       {visible ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/api/raw/${encodeURIComponent(filename)}`}
+          src={`/api/raw/${encodeFilePath(filename)}`}
           alt=""
           className="w-full h-full object-cover"
           loading="lazy"
@@ -200,6 +208,8 @@ export default function AnnotatorPage() {
   const [opacity, setOpacity] = useState(0);
   const [autoAdvance, setAutoAdvance] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadFolder, setUploadFolder] = useState<UploadFolder>("bus/positive");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const [clipboard, setClipboard] = useState<Annotation | null>(null);
@@ -462,7 +472,7 @@ export default function AnnotatorPage() {
           currentStatus === "accepted" || currentStatus === "rejected"
             ? currentStatus
             : anns.length > 0 ? "annotated" : "unannotated";
-        await fetch(`/api/annotations/${encodeURIComponent(targetFilename)}`, {
+        await fetch(`/api/annotations/${encodeFilePath(targetFilename)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -668,7 +678,7 @@ export default function AnnotatorPage() {
     if (!currentImage) return;
     const comment = reviewComment || `Status set to ${status}`;
     try {
-      const res = await fetch(`/api/annotations/${encodeURIComponent(currentImage)}`, {
+      const res = await fetch(`/api/annotations/${encodeFilePath(currentImage)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, comment }),
@@ -694,7 +704,7 @@ export default function AnnotatorPage() {
   const saveNow = useCallback(async () => {
     if (!currentImage) return;
     setSaveIndicator("Saving...");
-    await fetch(`/api/annotations/${encodeURIComponent(currentImage)}`, {
+    await fetch(`/api/annotations/${encodeFilePath(currentImage)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -729,14 +739,19 @@ export default function AnnotatorPage() {
     const prevFilename = currentImageRef.current;
     if (prevFilename && prevFilename !== filename) {
       try {
-        await fetch(`/api/annotations/${encodeURIComponent(prevFilename)}`, {
+        await fetch(`/api/annotations/${encodeFilePath(prevFilename)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             filename: prevFilename,
             annotations: annotationsRef.current,
             labels: labelsRef.current,
-            status: annotationsRef.current.length > 0 ? "annotated" : "unannotated",
+            status: (() => {
+              const s = imageStatusRef.current;
+              return s === "accepted" || s === "rejected"
+                ? s
+                : annotationsRef.current.length > 0 ? "annotated" : "unannotated";
+            })(),
             reviewComment: reviewCommentRef.current,
             history: reviewHistoryRef.current,
             imageWidth: imageDims.current.width,
@@ -757,7 +772,7 @@ export default function AnnotatorPage() {
 
     let data: ImageAnnotation;
     try {
-      const res = await fetch(`/api/annotations/${encodeURIComponent(filename)}`);
+      const res = await fetch(`/api/annotations/${encodeFilePath(filename)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       data = await res.json();
     } catch (err) {
@@ -789,7 +804,7 @@ export default function AnnotatorPage() {
     try {
       const fabric = await import("fabric");
       img = await fabric.FabricImage.fromURL(
-        `/api/raw/${encodeURIComponent(filename)}`,
+        `/api/raw/${encodeFilePath(filename)}`,
         { crossOrigin: "anonymous" },
       );
     } catch (err) {
@@ -1294,16 +1309,12 @@ export default function AnnotatorPage() {
     c.requestRenderAll();
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault(); setIsDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
-    if (files.length === 0) {
-      toast.error("No valid images in drop", { description: "Only image files are accepted." });
-      return;
-    }
-    const tId = toast.loading(`Uploading ${files.length} image${files.length === 1 ? "" : "s"}…`);
+  const uploadFiles = useCallback(async (files: File[], folder: UploadFolder) => {
+    if (files.length === 0) return;
+    const tId = toast.loading(`Uploading ${files.length} image${files.length === 1 ? "" : "s"} → ${folder}…`);
     const formData = new FormData();
     files.forEach((f) => formData.append("files", f));
+    formData.append("folder", folder);
     try {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json().catch(() => ({}));
@@ -1313,9 +1324,9 @@ export default function AnnotatorPage() {
       const count = data.uploaded?.length ?? 0;
       const rejectedCount = data.rejected?.length ?? 0;
       if (count > 0) {
-        toast.success(`Uploaded ${count} image${count === 1 ? "" : "s"}`, {
+        toast.success(`Uploaded ${count} image${count === 1 ? "" : "s"} to ${folder}`, {
           id: tId,
-          description: rejectedCount > 0 ? `${rejectedCount} file${rejectedCount === 1 ? "" : "s"} skipped` : undefined,
+          description: rejectedCount > 0 ? `${rejectedCount} skipped` : undefined,
         });
       }
       for (const r of data.rejected || []) {
@@ -1326,6 +1337,18 @@ export default function AnnotatorPage() {
       toast.error("Upload failed", { id: tId, description: String(err) });
     }
   }, [fetchImages, fetchStats]);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault(); setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files).filter(
+      (f) => f.type.startsWith("image/") || /\.(heic|heif)$/i.test(f.name),
+    );
+    if (files.length === 0) {
+      toast.error("No valid images in drop", { description: "Only image files are accepted." });
+      return;
+    }
+    await uploadFiles(files, uploadFolder);
+  }, [uploadFiles, uploadFolder]);
 
   const doExportCOCO = useCallback(async () => {
     const tId = toast.loading("Exporting COCO…");
@@ -1352,12 +1375,61 @@ export default function AnnotatorPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const msg = `${data.files} files, ${data.classes?.length || 0} classes`;
-      setExportResult(`YOLO exported — ${msg}. Files written to /exports.`);
+      setExportResult(`YOLO exported — ${msg}. Files written to R2 /exports.`);
       toast.success("YOLO exported", { id: tId, description: msg });
     } catch (err) {
       toast.error("YOLO export failed", { id: tId, description: String(err) });
     }
   }, []);
+
+  const doExportZip = useCallback(async () => {
+    const tId = toast.loading("Building ZIP…");
+    try {
+      const res = await fetch("/api/export/zip");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") || "";
+      const match = cd.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : "annotations.zip";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+      const kb = Math.round(blob.size / 1024);
+      setExportResult(`ZIP downloaded — ${kb} KB, includes annotation JSONs, COCO, and YOLO.`);
+      toast.success("ZIP downloaded", { id: tId, description: `${kb} KB` });
+    } catch (err) {
+      toast.error("ZIP export failed", { id: tId, description: String(err) });
+    }
+  }, []);
+
+  const doInitFolders = useCallback(async () => {
+    const tId = toast.loading("Creating folder structure in R2…");
+    try {
+      const res = await fetch("/api/admin", { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      toast.success("Folders created", { id: tId, description: (data.folders as string[]).join(", ") });
+    } catch (err) {
+      toast.error("Init failed", { id: tId, description: String(err) });
+    }
+  }, []);
+
+  const doClearAll = useCallback(async () => {
+    const tId = toast.loading("Deleting all images and annotations…");
+    setShowClearConfirm(false);
+    try {
+      const res = await fetch("/api/admin", { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      toast.success("Cleared", { id: tId, description: `${data.raw} images, ${data.annotations} annotation files deleted` });
+      setCurrentImage(null); currentImageRef.current = null;
+      setAnnotations([]); annotationsRef.current = [];
+      setImageStatus("unannotated");
+      fetchImages(); fetchStats();
+    } catch (err) {
+      toast.error("Clear failed", { id: tId, description: String(err) });
+    }
+  }, [fetchImages, fetchStats]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -1516,6 +1588,26 @@ export default function AnnotatorPage() {
               <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Images</h3>
               <span className="text-[10px] text-muted-foreground tabular-nums">{filteredImages.length}</span>
             </div>
+            {/* Upload folder selector */}
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted-foreground">Upload to:</span>
+              <div className="grid grid-cols-2 gap-1">
+                {UPLOAD_FOLDERS.map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setUploadFolder(f)}
+                    className={cn(
+                      "px-1.5 py-1 text-[10px] rounded border leading-tight text-center transition-colors",
+                      uploadFolder === f
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "hover:bg-accent border-border text-muted-foreground",
+                    )}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -1561,9 +1653,16 @@ export default function AnnotatorPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className={cn("w-2 h-2 rounded-full shrink-0", statusDot[img.status])} />
-                        <span className="truncate" title={img.filename}>{img.filename}</span>
+                        {/* Show just the base filename, not the full path */}
+                        <span className="truncate" title={img.filename}>{img.filename.split("/").pop()}</span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
+                        {/* Folder badge — the first two path segments */}
+                        {img.filename.includes("/") && (
+                          <span className={cn("text-[9px] px-1 rounded font-mono shrink-0", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
+                            {img.filename.split("/").slice(0, 2).join("/")}
+                          </span>
+                        )}
                         <span className={cn("text-[10px] capitalize", currentImage === img.filename ? "text-primary-foreground/70" : "text-muted-foreground")}>{img.status}</span>
                         {img.annotationCount > 0 && (
                           <span className={cn("text-[10px] px-1 rounded font-semibold tabular-nums", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
@@ -1710,34 +1809,22 @@ export default function AnnotatorPage() {
                 <label className="cursor-pointer">
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     multiple
                     className="hidden"
                     onChange={async (ev) => {
                       const files = Array.from(ev.target.files || []);
-                      if (files.length === 0) return;
-                      const tId = toast.loading(`Uploading ${files.length} image${files.length === 1 ? "" : "s"}…`);
-                      const fd = new FormData();
-                      files.forEach((f) => fd.append("files", f));
-                      try {
-                        const res = await fetch("/api/upload", { method: "POST", body: fd });
-                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                        const data = await res.json();
-                        toast.success(`Uploaded ${data.uploaded?.length ?? 0}`, { id: tId });
-                        fetchImages(); fetchStats();
-                      } catch (err) {
-                        toast.error("Upload failed", { id: tId, description: String(err) });
-                      }
+                      await uploadFiles(files, uploadFolder);
                       ev.target.value = "";
                     }}
                   />
                   <span className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/80 transition">
                     <Upload className="size-4" />
-                    Upload images
+                    Upload to {uploadFolder}
                   </span>
                 </label>
                 <p className="text-[11px] text-muted-foreground">
-                  Stored in R2 under <code className="bg-muted px-1.5 py-0.5 rounded font-mono">raw/</code>
+                  Stored in R2 under <code className="bg-muted px-1.5 py-0.5 rounded font-mono">raw/{uploadFolder}/</code>
                 </p>
               </div>
             )}
@@ -1873,7 +1960,14 @@ export default function AnnotatorPage() {
               className="w-full p-4 border rounded-lg text-left hover:border-primary hover:bg-accent transition group"
             >
               <h3 className="text-sm font-semibold group-hover:text-primary transition">YOLO TXT</h3>
-              <p className="text-xs text-muted-foreground mt-1">Normalized bounding boxes per image. Compatible with Ultralytics YOLOv5/v8.</p>
+              <p className="text-xs text-muted-foreground mt-1">Normalized bounding boxes per image. Compatible with Ultralytics YOLOv5/v8. Written to R2 /exports.</p>
+            </button>
+            <button
+              onClick={doExportZip}
+              className="w-full p-4 border rounded-lg text-left hover:border-primary hover:bg-accent transition group border-dashed"
+            >
+              <h3 className="text-sm font-semibold group-hover:text-primary transition">Bulk ZIP Download</h3>
+              <p className="text-xs text-muted-foreground mt-1">All annotation JSONs + COCO + YOLO in one ZIP file. Includes all annotated images.</p>
             </button>
             {exportResult && (
               <div className="p-3 bg-emerald-500/10 rounded-md text-xs text-emerald-400 font-mono border border-emerald-500/30">
@@ -1906,7 +2000,59 @@ export default function AnnotatorPage() {
               </div>
               <Slider min={0} max={100} step={1} value={[opacity]} onValueChange={(v) => { setOpacity(v[0]); opacityRef.current = v[0]; }} />
             </div>
+
+            <Separator />
+
+            {/* Storage */}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">R2 Storage</Label>
+              <p className="text-xs text-muted-foreground">
+                Folder structure: <code className="bg-muted px-1 py-0.5 rounded">raw/bus/positive</code>, <code className="bg-muted px-1 py-0.5 rounded">raw/bus/negative</code>, <code className="bg-muted px-1 py-0.5 rounded">raw/legua/positive</code>, <code className="bg-muted px-1 py-0.5 rounded">raw/legua/negative</code>
+              </p>
+              <Button variant="outline" size="sm" className="w-full" onClick={doInitFolders}>
+                Create folder structure in R2
+              </Button>
+            </div>
+
+            <Separator />
+
+            {/* Danger zone */}
+            <div className="space-y-2 rounded-lg border border-destructive/30 p-3">
+              <Label className="text-sm font-semibold text-destructive">Danger Zone</Label>
+              <p className="text-xs text-muted-foreground">
+                Permanently deletes all raw images and annotation files from R2. This cannot be undone.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full"
+                onClick={() => { setShowSettingsModal(false); setShowClearConfirm(true); }}
+              >
+                <Trash2 /> Delete all images &amp; annotations
+              </Button>
+            </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm clear all */}
+      <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Delete everything?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <span className="font-semibold text-foreground">all {stats.total} images</span> and their annotations from R2.
+              Exports in <code className="bg-muted px-1 py-0.5 rounded text-xs">exports/</code> are preserved.
+              <br /><br />
+              There is no undo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={doClearAll}>
+              <Trash2 /> Yes, delete everything
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

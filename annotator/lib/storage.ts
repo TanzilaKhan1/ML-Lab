@@ -9,7 +9,16 @@ import {
   joinKey,
   listKeys,
   putObject,
+  deleteObjects,
 } from "./r2";
+
+export const UPLOAD_FOLDERS = [
+  "bus/positive",
+  "bus/negative",
+  "legua/positive",
+  "legua/negative",
+] as const;
+export type UploadFolder = (typeof UPLOAD_FOLDERS)[number];
 import type { ImageAnnotation, ImageInfo, ImageStatus, ProjectStats } from "./types";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".svg"];
@@ -325,6 +334,29 @@ export async function exportCOCO() {
 
   await putObject(expKey("coco_export.json"), JSON.stringify(coco, null, 2), "application/json");
   return coco;
+}
+
+/** Create the four canonical folder markers in R2 so they appear in dashboards. */
+export async function initFolders(): Promise<string[]> {
+  const markers = UPLOAD_FOLDERS.map((f) => joinKey(PREFIX_RAW(), f) + "/");
+  await Promise.all(markers.map((k) => putObject(k, "", "application/x-directory")));
+  return [...UPLOAD_FOLDERS];
+}
+
+/**
+ * Delete all raw images and annotation JSONs from R2.
+ * Export files under PREFIX_EXP are left intact.
+ */
+export async function clearAllData(): Promise<{ raw: number; annotations: number }> {
+  const [rawKeys, annKeys] = await Promise.all([
+    listKeys(PREFIX_RAW()),
+    listKeys(PREFIX_ANN()),
+  ]);
+  const [rawCount, annCount] = await Promise.all([
+    deleteObjects(rawKeys),
+    deleteObjects(annKeys),
+  ]);
+  return { raw: rawCount, annotations: annCount };
 }
 
 export async function exportYOLO() {

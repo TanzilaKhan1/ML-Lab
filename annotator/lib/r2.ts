@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   ListObjectsV2Command,
   HeadBucketCommand,
   NoSuchKey,
@@ -101,9 +102,26 @@ export async function getObjectText(key: string): Promise<string | null> {
   return res ? res.body.toString("utf8") : null;
 }
 
-/** Delete an object. Idempotent — does not throw if key is absent. */
+/** Delete a single object. Idempotent — does not throw if key is absent. */
 export async function deleteObject(key: string): Promise<void> {
   await client().send(new DeleteObjectCommand({ Bucket: BUCKET(), Key: key }));
+}
+
+/** Delete up to thousands of objects in batched requests (1 000 per call). */
+export async function deleteObjects(keys: string[]): Promise<number> {
+  if (keys.length === 0) return 0;
+  let deleted = 0;
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    await client().send(
+      new DeleteObjectsCommand({
+        Bucket: BUCKET(),
+        Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
+      }),
+    );
+    deleted += chunk.length;
+  }
+  return deleted;
 }
 
 /** List all object keys under a prefix. Handles pagination. */
