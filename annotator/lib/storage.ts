@@ -73,24 +73,81 @@ async function loadAnnotation(filename: string): Promise<ImageAnnotation | null>
   return safeJsonParse<ImageAnnotation>(text);
 }
 
-export async function getImages(filter?: ImageStatus | "all"): Promise<ImageInfo[]> {
+// ---------------------------------------------------------------------------
+// Manifest — single file that tracks {status, count} for every image so the
+// sidebar/stats don't have to fetch N annotation JSONs on every page load.
+//
+// Consistency: writes are read-modify-write; concurrent edits to DIFFERENT
+// images can race (last-write-wins on the manifest row). The authoritative
+// per-image annotation JSON is always written FIRST, so the only user-visible
+// effect of a race is a momentarily stale row in the sidebar, which self-heals
+// on the next save for that image. An admin "Rebuild manifest" action forces
+// a full rescan.
+// ---------------------------------------------------------------------------
+interface ManifestEntry { status: ImageStatus; count: number }
+interface Manifest { version: 1; updatedAt: string; images: Record<string, ManifestEntry> }
+
+const MANIFEST_KEY = () => joinKey(PREFIX_ANN(), "_manifest.json");
+
+async function readManifest(): Promise<Manifest | null> {
+  const text = await getObjectText(MANIFEST_KEY());
+  const m = safeJsonParse<Manifest>(text);
+  if (!m || m.version !== 1 || !m.images) return null;
+  return m;
+}
+
+async function writeManifest(m: Manifest): Promise<void> {
+  m.updatedAt = new Date().toISOString();
+  await putObject(MANIFEST_KEY(), JSON.stringify(m), "application/json");
+}
+
+async function upsertManifestEntry(filename: string, entry: ManifestEntry): Promise<void> {
+  const m = (await readManifest()) ?? { version: 1, updatedAt: "", images: {} };
+  m.images[filename] = entry;
+  await writeManifest(m);
+}
+
+/** Full rescan — expensive but authoritative. Called on first access if no
+ *  manifest exists, and manually via the admin UI after bulk uploads. */
+export async function rebuildManifest(): Promise<Manifest> {
   const keys = await listKeys(PREFIX_RAW());
   const imageKeys = keys.filter(isImageKey).sort();
 
-  // Fetch annotations in parallel. A malformed annotation JSON is treated as
-  // "unannotated" rather than crashing the whole listing.
-  const results = await Promise.all(
-    imageKeys.map(async (k): Promise<ImageInfo> => {
-      const filename = rawFilename(k);
-      const data = await loadAnnotation(filename);
-      if (!data) return { filename, status: "unannotated", annotationCount: 0 };
-      return {
-        filename,
-        status: (data.status || "annotated") as ImageStatus,
-        annotationCount: (data.annotations || []).length,
-      };
-    }),
-  );
+  const entries = await Promise.all(imageKeys.map(async (k) => {
+    const filename = rawFilename(k);
+    const data = await loadAnnotation(filename);
+    const entry: ManifestEntry = {
+      status: (data?.status || "unannotated") as ImageStatus,
+      count: (data?.annotations || []).length,
+    };
+    return [filename, entry] as const;
+  }));
+
+  const m: Manifest = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    images: Object.fromEntries(entries),
+  };
+  await writeManifest(m);
+  return m;
+}
+
+export async function getImages(filter?: ImageStatus | "all"): Promise<ImageInfo[]> {
+  // 1 LIST + 1 GET (manifest) regardless of image count.
+  // Falls back to full rescan on first call / after admin reset.
+  const [keys, manifest] = await Promise.all([listKeys(PREFIX_RAW()), readManifest()]);
+  const imageKeys = keys.filter(isImageKey).sort();
+  const m = manifest ?? (await rebuildManifest());
+
+  const results: ImageInfo[] = imageKeys.map((k) => {
+    const filename = rawFilename(k);
+    const entry = m.images[filename];
+    return {
+      filename,
+      status: (entry?.status ?? "unannotated") as ImageStatus,
+      annotationCount: entry?.count ?? 0,
+    };
+  });
 
   if (filter && filter !== "all") {
     return results.filter((i) => i.status === filter);
@@ -113,7 +170,12 @@ export async function getAnnotation(filename: string): Promise<ImageAnnotation> 
 
 export async function saveAnnotation(data: ImageAnnotation): Promise<void> {
   data.lastModified = new Date().toISOString();
+  // Annotation file first (source of truth), manifest after (fast-path cache).
   await putObject(annKey(data.filename), JSON.stringify(data, null, 2), "application/json");
+  await upsertManifestEntry(data.filename, {
+    status: (data.status || "annotated") as ImageStatus,
+    count: (data.annotations || []).length,
+  });
 }
 
 export async function saveUploadedImage(filename: string, buffer: Buffer): Promise<void> {
@@ -153,11 +215,13 @@ export async function updateStatus(
   }
   data.lastModified = new Date().toISOString();
   await putObject(annKey(filename), JSON.stringify(data, null, 2), "application/json");
+  await upsertManifestEntry(filename, { status, count: (data.annotations || []).length });
 }
 
 export async function getStats(): Promise<ProjectStats> {
-  const keys = await listKeys(PREFIX_RAW());
+  const [keys, manifest] = await Promise.all([listKeys(PREFIX_RAW()), readManifest()]);
   const imageKeys = keys.filter(isImageKey);
+  const m = manifest ?? (await rebuildManifest());
 
   const stats: ProjectStats = {
     total: imageKeys.length,
@@ -167,16 +231,9 @@ export async function getStats(): Promise<ProjectStats> {
     rejected: 0,
   };
 
-  const statuses = await Promise.all(
-    imageKeys.map(async (k) => {
-      const filename = rawFilename(k);
-      const data = await loadAnnotation(filename);
-      if (!data) return "unannotated" as ImageStatus;
-      return (data.status || "annotated") as ImageStatus;
-    }),
-  );
-
-  for (const s of statuses) {
+  for (const k of imageKeys) {
+    const filename = rawFilename(k);
+    const s = (m.images[filename]?.status ?? "unannotated") as ImageStatus;
     stats[s] = (stats[s] || 0) + 1;
   }
   return stats;

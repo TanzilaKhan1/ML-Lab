@@ -500,7 +500,9 @@ export default function AnnotatorPage() {
     c.requestRenderAll();
   }, [opacity]);
 
-  const scheduleAutoSave = useCallback((anns: Annotation[]) => {
+  // fast = 150 ms debounce for structural edits (draw, delete, resize, status);
+  // default 600 ms is for keystroke-driven updates (review comment, attributes).
+  const scheduleAutoSave = useCallback((anns: Annotation[], fast: boolean = false) => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     const targetFilename = currentImageRef.current;
     if (!targetFilename) return;
@@ -543,7 +545,7 @@ export default function AnnotatorPage() {
           toast.error("Save failed", { description: String(err) });
         }
       }
-    }, 600);
+    }, fast ? 150 : 600);
   }, [fetchImages, fetchStats]);
 
   const snapshot = useCallback((): Snapshot => ({
@@ -554,7 +556,7 @@ export default function AnnotatorPage() {
   const applySnapshot = useCallback((s: Snapshot) => {
     setAnnotations(s.annotations); annotationsRef.current = s.annotations;
     setLabels(s.labels); labelsRef.current = s.labels;
-    renderAnnotations(s.annotations); scheduleAutoSave(s.annotations);
+    renderAnnotations(s.annotations); scheduleAutoSave(s.annotations, true);
   }, [renderAnnotations, scheduleAutoSave]);
 
   const pushUndo = useCallback(() => {
@@ -580,7 +582,7 @@ export default function AnnotatorPage() {
     const newAnns = annotationsRef.current.filter((a) => a.id !== selectedAnnotation);
     setAnnotations(newAnns); annotationsRef.current = newAnns;
     setSelectedAnnotation(null);
-    renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+    renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
   }, [selectedAnnotation, pushUndo, renderAnnotations, scheduleAutoSave]);
 
   const copySelected = useCallback(() => {
@@ -605,7 +607,7 @@ export default function AnnotatorPage() {
     const newAnns = [...annotationsRef.current, cloned];
     setAnnotations(newAnns); annotationsRef.current = newAnns;
     setSelectedAnnotation(cloned.id);
-    renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+    renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
   }, [clipboard, pushUndo, renderAnnotations, scheduleAutoSave]);
 
   const duplicateSelected = useCallback(() => {
@@ -624,7 +626,7 @@ export default function AnnotatorPage() {
     const newAnns = [...annotationsRef.current, cloned];
     setAnnotations(newAnns); annotationsRef.current = newAnns;
     setSelectedAnnotation(cloned.id);
-    renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+    renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
   }, [selectedAnnotation, pushUndo, renderAnnotations, scheduleAutoSave]);
 
   const deleteAnnotation = useCallback((id: string) => {
@@ -632,7 +634,7 @@ export default function AnnotatorPage() {
     const newAnns = annotationsRef.current.filter((a) => a.id !== id);
     setAnnotations(newAnns); annotationsRef.current = newAnns;
     if (selectedAnnotation === id) setSelectedAnnotation(null);
-    renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+    renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
   }, [pushUndo, selectedAnnotation, renderAnnotations, scheduleAutoSave]);
 
   const toggleAnnotationFlag = useCallback(
@@ -642,7 +644,7 @@ export default function AnnotatorPage() {
       );
       setAnnotations(newAnns); annotationsRef.current = newAnns;
       if (key === "hidden" && selectedAnnotation === id) setSelectedAnnotation(null);
-      renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+      renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
     },
     [renderAnnotations, scheduleAutoSave, selectedAnnotation],
   );
@@ -929,7 +931,7 @@ export default function AnnotatorPage() {
         const newAnns = [...annotationsRef.current, ann];
         setAnnotations(newAnns); annotationsRef.current = newAnns;
         renderAnnotations(newAnns, canvas);
-        scheduleAutoSave(newAnns);
+        scheduleAutoSave(newAnns, true);
         return true;
       };
       (canvas as any).__finalizePolyShape = finalizePolyShape;
@@ -1041,7 +1043,7 @@ export default function AnnotatorPage() {
           const newAnns = [...annotationsRef.current, ann];
           setAnnotations(newAnns); annotationsRef.current = newAnns;
           renderAnnotations(newAnns, canvas);
-          scheduleAutoSave(newAnns);
+          scheduleAutoSave(newAnns, true);
         }
       });
 
@@ -1139,7 +1141,7 @@ export default function AnnotatorPage() {
             const newAnns = [...annotationsRef.current, ann];
             setAnnotations(newAnns); annotationsRef.current = newAnns;
             renderAnnotations(newAnns, canvas);
-            scheduleAutoSave(newAnns);
+            scheduleAutoSave(newAnns, true);
           }
         }
       });
@@ -1214,7 +1216,7 @@ export default function AnnotatorPage() {
         }
 
         setAnnotations(newAnns); annotationsRef.current = newAnns;
-        scheduleAutoSave(newAnns);
+        scheduleAutoSave(newAnns, true);
         requestAnimationFrame(() => renderAnnotations(newAnns, canvas));
       });
 
@@ -1338,7 +1340,7 @@ export default function AnnotatorPage() {
       setActiveLabel(newLabels[0].name);
       activeLabelRef.current = newLabels[0].name;
     }
-    renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+    renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
     setPendingLabelDelete(null);
     toast.success(`Deleted label and ${pendingLabelDelete.count} annotation${pendingLabelDelete.count === 1 ? "" : "s"}`);
   }, [pendingLabelDelete, pushUndo, renderAnnotations, scheduleAutoSave]);
@@ -1460,6 +1462,19 @@ export default function AnnotatorPage() {
       toast.error("Init failed", { id: tId, description: String(err) });
     }
   }, []);
+
+  const doRebuildManifest = useCallback(async () => {
+    const tId = toast.loading("Rebuilding manifest…");
+    try {
+      const res = await fetch("/api/admin", { method: "PUT" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      toast.success("Manifest rebuilt", { id: tId, description: `${data.images} images indexed` });
+      fetchImages(); fetchStats();
+    } catch (err) {
+      toast.error("Rebuild failed", { id: tId, description: String(err) });
+    }
+  }, [fetchImages, fetchStats]);
 
   const doClearAll = useCallback(async () => {
     const tId = toast.loading("Deleting all images and annotations…");
@@ -1950,7 +1965,7 @@ export default function AnnotatorPage() {
                   a.id === id ? { ...a, label: newLabel, color: getLabelColor(newLabel) } : a,
                 );
                 setAnnotations(newAnns); annotationsRef.current = newAnns;
-                renderAnnotations(newAnns); scheduleAutoSave(newAnns);
+                renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
               }}
               onSetAttribute={setAnnotationAttribute}
               onCopy={copySelected}
@@ -2061,6 +2076,9 @@ export default function AnnotatorPage() {
               </p>
               <Button variant="outline" size="sm" className="w-full" onClick={doInitFolders}>
                 Create folder structure in R2
+              </Button>
+              <Button variant="outline" size="sm" className="w-full" onClick={doRebuildManifest}>
+                Rebuild manifest (rescan all annotations)
               </Button>
             </div>
 
