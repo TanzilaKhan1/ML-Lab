@@ -49,6 +49,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1546,13 +1555,120 @@ export default function AnnotatorPage() {
   })();
 
   return (
-    <div className="h-screen flex flex-col bg-background text-foreground">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-4 h-12 bg-sidebar border-b shrink-0 z-10">
-        <div className="flex items-center gap-3">
-          <h1 className="text-sm font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">
-            Image Annotator
-          </h1>
+    <SidebarProvider className="h-screen bg-background text-foreground">
+      {/* Left: image list (collapsible — Cmd/Ctrl+B to toggle) */}
+      <Sidebar collapsible="offcanvas">
+        <SidebarHeader className="gap-2 p-3 border-b">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Images</h3>
+            <span className="text-[10px] text-muted-foreground tabular-nums">{filteredImages.length}</span>
+          </div>
+          {/* Upload folder selector */}
+          <div className="space-y-1">
+            <span className="text-[10px] text-muted-foreground">Upload to:</span>
+            <div className="grid grid-cols-2 gap-1">
+              {UPLOAD_FOLDERS.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setUploadFolder(f)}
+                  className={cn(
+                    "px-1.5 py-1 text-[10px] rounded border leading-tight text-center transition-colors",
+                    uploadFolder === f
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "hover:bg-accent border-border text-muted-foreground",
+                  )}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search filenames…"
+            className="h-8 text-xs"
+          />
+          <Select value={filter} onValueChange={(v) => setFilter(v as ImageStatus | "all")}>
+            <SelectTrigger size="sm" className="w-full text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="unannotated">Unannotated</SelectItem>
+              <SelectItem value="annotated">Annotated</SelectItem>
+              <SelectItem value="accepted">Accepted</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+        </SidebarHeader>
+        <SidebarContent className="sidebar-images-scroll">
+          <div className="p-1">
+            {filteredImages.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground text-xs">
+                {images.length === 0 ? (
+                  <>No images yet.<br /><span className="text-[11px]">Drop images onto the canvas to upload.</span></>
+                ) : (
+                  <>No matches for &ldquo;{searchQuery}&rdquo;</>
+                )}
+              </div>
+            ) : (
+              filteredImages.map((img) => (
+                <button
+                  key={img.filename}
+                  onClick={() => loadImage(img.filename)}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors text-left",
+                    currentImage === img.filename
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-accent hover:text-accent-foreground",
+                  )}
+                >
+                  <ImageThumb filename={img.filename} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("w-2 h-2 rounded-full shrink-0", statusDot[img.status])} />
+                      {/* Show just the base filename, not the full path */}
+                      <span className="truncate" title={img.filename}>{img.filename.split("/").pop()}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {/* Folder badge — the first two path segments */}
+                      {img.filename.includes("/") && (
+                        <span className={cn("text-[9px] px-1 rounded font-mono shrink-0", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
+                          {img.filename.split("/").slice(0, 2).join("/")}
+                        </span>
+                      )}
+                      <span className={cn("text-[10px] capitalize", currentImage === img.filename ? "text-primary-foreground/70" : "text-muted-foreground")}>{img.status}</span>
+                      {img.annotationCount > 0 && (
+                        <span className={cn("text-[10px] px-1 rounded font-semibold tabular-nums", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
+                          {img.annotationCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </SidebarContent>
+        <SidebarFooter className="p-3 border-t">
+          <div className="h-1 bg-muted rounded-full overflow-hidden mb-1.5">
+            <div className="h-full bg-gradient-to-r from-primary to-emerald-400 transition-all" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {stats.annotated + stats.accepted + stats.rejected}/{stats.total} annotated
+          </span>
+        </SidebarFooter>
+      </Sidebar>
+
+      <SidebarInset className="min-w-0">
+        {/* Top bar */}
+        <header className="flex items-center justify-between px-4 h-12 bg-sidebar border-b shrink-0 z-10">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger />
+            <h1 className="text-sm font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">
+              Image Annotator
+            </h1>
           <Separator orientation="vertical" className="h-5" />
           <div className="flex gap-1.5">
             <Badge variant="outline">{stats.total} total</Badge>
@@ -1580,114 +1696,9 @@ export default function AnnotatorPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
-        {/* Left: image list */}
-        <aside className="w-64 min-w-64 bg-sidebar border-r flex flex-col overflow-hidden">
-          <div className="p-3 border-b space-y-2">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Images</h3>
-              <span className="text-[10px] text-muted-foreground tabular-nums">{filteredImages.length}</span>
-            </div>
-            {/* Upload folder selector */}
-            <div className="space-y-1">
-              <span className="text-[10px] text-muted-foreground">Upload to:</span>
-              <div className="grid grid-cols-2 gap-1">
-                {UPLOAD_FOLDERS.map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setUploadFolder(f)}
-                    className={cn(
-                      "px-1.5 py-1 text-[10px] rounded border leading-tight text-center transition-colors",
-                      uploadFolder === f
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "hover:bg-accent border-border text-muted-foreground",
-                    )}
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search filenames…"
-              className="h-8 text-xs"
-            />
-            <Select value={filter} onValueChange={(v) => setFilter(v as ImageStatus | "all")}>
-              <SelectTrigger size="sm" className="w-full text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="unannotated">Unannotated</SelectItem>
-                <SelectItem value="annotated">Annotated</SelectItem>
-                <SelectItem value="accepted">Accepted</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <ScrollArea className="flex-1 sidebar-images-scroll">
-            <div className="p-1">
-              {filteredImages.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground text-xs">
-                  {images.length === 0 ? (
-                    <>No images yet.<br /><span className="text-[11px]">Drop images onto the canvas to upload.</span></>
-                  ) : (
-                    <>No matches for &ldquo;{searchQuery}&rdquo;</>
-                  )}
-                </div>
-              ) : (
-                filteredImages.map((img) => (
-                  <button
-                    key={img.filename}
-                    onClick={() => loadImage(img.filename)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors text-left",
-                      currentImage === img.filename
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground",
-                    )}
-                  >
-                    <ImageThumb filename={img.filename} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn("w-2 h-2 rounded-full shrink-0", statusDot[img.status])} />
-                        {/* Show just the base filename, not the full path */}
-                        <span className="truncate" title={img.filename}>{img.filename.split("/").pop()}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {/* Folder badge — the first two path segments */}
-                        {img.filename.includes("/") && (
-                          <span className={cn("text-[9px] px-1 rounded font-mono shrink-0", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
-                            {img.filename.split("/").slice(0, 2).join("/")}
-                          </span>
-                        )}
-                        <span className={cn("text-[10px] capitalize", currentImage === img.filename ? "text-primary-foreground/70" : "text-muted-foreground")}>{img.status}</span>
-                        {img.annotationCount > 0 && (
-                          <span className={cn("text-[10px] px-1 rounded font-semibold tabular-nums", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
-                            {img.annotationCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </ScrollArea>
-          <div className="p-3 border-t">
-            <div className="h-1 bg-muted rounded-full overflow-hidden mb-1.5">
-              <div className="h-full bg-gradient-to-r from-primary to-emerald-400 transition-all" style={{ width: `${progress}%` }} />
-            </div>
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              {stats.annotated + stats.accepted + stats.rejected}/{stats.total} annotated
-            </span>
-          </div>
-        </aside>
-
-        {/* Center: toolbar + canvas */}
-        <main className="flex-1 flex flex-col min-w-0">
+        <div className="flex flex-1 min-h-0">
+          {/* Center: toolbar + canvas */}
+          <section className="flex-1 flex flex-col min-w-0">
           <div className="flex items-center gap-1 px-2 py-1.5 bg-sidebar border-b">
             <div className="flex gap-0.5 pr-2 border-r">
               {TOOLS.map((t) => {
@@ -1854,7 +1865,7 @@ export default function AnnotatorPage() {
             </>}
             <span className={cn("ml-auto", saveIndicator === "Saved" && "text-emerald-400", saveIndicator === "Save failed" && "text-red-400")}>{saveIndicator}</span>
           </div>
-        </main>
+        </section>
 
         {/* Right: labels / properties / annotations / review */}
         <aside className="w-80 min-w-80 bg-sidebar border-l flex flex-col">
@@ -1932,7 +1943,8 @@ export default function AnnotatorPage() {
             />
           </ScrollArea>
         </aside>
-      </div>
+        </div>
+      </SidebarInset>
 
       <ShortcutsDialog open={showShortcutsModal} onOpenChange={setShowShortcutsModal} />
 
@@ -2080,6 +2092,6 @@ export default function AnnotatorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </SidebarProvider>
   );
 }
