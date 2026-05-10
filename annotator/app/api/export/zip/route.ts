@@ -111,14 +111,22 @@ export async function GET() {
   const annPrefix = PREFIX_ANN();
   const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".svg"]);
 
+  // Exclude soft-deleted items (anything under <prefix>/_trash/).
+  const isUnderTrash = (k: string, base: string) => {
+    const p = base + "/";
+    const rel = k.startsWith(p) ? k.slice(p.length) : k;
+    return rel === "_trash" || rel.startsWith("_trash/");
+  };
+
   // List all raw image keys (excluding empty folder-marker objects)
   const rawKeys = (await listKeys(rawPrefix)).filter((k) => {
+    if (isUnderTrash(k, rawPrefix)) return false;
     const ext = k.slice(k.lastIndexOf(".")).toLowerCase();
     return IMAGE_EXTS.has(ext);
   });
 
   // List all annotation JSON keys
-  const annKeys = (await listKeys(annPrefix)).filter((k) => k.endsWith(".json"));
+  const annKeys = (await listKeys(annPrefix)).filter((k) => k.endsWith(".json") && !isUnderTrash(k, annPrefix));
 
   // Build annotation map: relative filename → annotation data
   type AnnData = {
