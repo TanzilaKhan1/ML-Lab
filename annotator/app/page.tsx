@@ -34,6 +34,8 @@ import {
   FileDown,
   ImageIcon,
   Upload,
+  MoreVertical,
+  FolderInput,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -61,6 +63,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -1559,6 +1569,63 @@ export default function AnnotatorPage() {
     }
   }, [fetchImages, fetchStats]);
 
+  // Cancel any pending autosave for `filename` AND clear current selection if
+  // it matches. Must run BEFORE issuing a move/delete so a debounced autosave
+  // (≤600ms) can't recreate the annotation at the OLD path after the server
+  // has already moved it.
+  const cancelInFlightForFilename = useCallback((filename: string) => {
+    if (currentImageRef.current !== filename) return;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    autoSaveAbortRef.current?.abort();
+    setCurrentImage(null);
+    currentImageRef.current = null;
+  }, []);
+
+  // Parse JSON body defensively — proxies may return HTML on 5xx.
+  const safeReadJson = async (res: Response): Promise<{ error?: string; filename?: string; trashedKey?: string }> => {
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("json")) return { error: `HTTP ${res.status}` };
+    try { return await res.json(); } catch { return { error: `HTTP ${res.status} (non-JSON body)` }; }
+  };
+
+  const moveImageRequest = useCallback(async (filename: string, destFolder: UploadFolder) => {
+    cancelInFlightForFilename(filename);
+    const tId = toast.loading(`Moving to ${destFolder}…`);
+    try {
+      const res = await fetch("/api/images/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, destFolder }),
+      });
+      const data = await safeReadJson(res);
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast.success("Moved", { id: tId, description: data.filename });
+    } catch (err) {
+      toast.error("Move failed", { id: tId, description: String(err instanceof Error ? err.message : err) });
+    } finally {
+      // Always re-sync — server may have partially succeeded.
+      fetchImages(); fetchStats();
+    }
+  }, [cancelInFlightForFilename, fetchImages, fetchStats]);
+
+  const deleteImageRequest = useCallback(async (filename: string) => {
+    cancelInFlightForFilename(filename);
+    const tId = toast.loading("Deleting…");
+    try {
+      const res = await fetch(`/api/images/${encodeFilePath(filename)}`, { method: "DELETE" });
+      const data = await safeReadJson(res);
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast.success("Deleted", { id: tId, description: data.trashedKey || filename });
+    } catch (err) {
+      toast.error("Delete failed", { id: tId, description: String(err instanceof Error ? err.message : err) });
+    } finally {
+      fetchImages(); fetchStats();
+    }
+  }, [cancelInFlightForFilename, fetchImages, fetchStats]);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === " " && !spaceHeld.current && !isEditingField(e.target) && !anyModalOpen()) {
@@ -1732,41 +1799,87 @@ export default function AnnotatorPage() {
                 )}
               </div>
             ) : (
-              filteredImages.map((img) => (
-                <button
-                  key={img.filename}
-                  onClick={() => loadImage(img.filename)}
-                  className={cn(
-                    "flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors text-left",
-                    currentImage === img.filename
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  <ImageThumb filename={img.filename} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className={cn("w-2 h-2 rounded-full shrink-0", statusDot[img.status])} />
-                      {/* Show just the base filename, not the full path */}
-                      <span className="truncate" title={img.filename}>{img.filename.split("/").pop()}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {/* Folder badge — the first two path segments */}
-                      {img.filename.includes("/") && (
-                        <span className={cn("text-[9px] px-1 rounded font-mono shrink-0", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
-                          {img.filename.split("/").slice(0, 2).join("/")}
-                        </span>
+              filteredImages.map((img) => {
+                const folderOfImg = img.filename.split("/").slice(0, 2).join("/");
+                const moveTargets = UPLOAD_FOLDERS.filter((f) => f !== folderOfImg);
+                const isActive = currentImage === img.filename;
+                return (
+                  <div key={img.filename} className="relative group">
+                    <button
+                      onClick={() => loadImage(img.filename)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-2 py-1.5 pr-7 rounded-md text-xs transition-colors text-left",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground",
                       )}
-                      <span className={cn("text-[10px] capitalize", currentImage === img.filename ? "text-primary-foreground/70" : "text-muted-foreground")}>{img.status}</span>
-                      {img.annotationCount > 0 && (
-                        <span className={cn("text-[10px] px-1 rounded font-semibold tabular-nums", currentImage === img.filename ? "bg-white/20" : "bg-muted text-muted-foreground")}>
-                          {img.annotationCount}
-                        </span>
-                      )}
-                    </div>
+                    >
+                      <ImageThumb filename={img.filename} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn("w-2 h-2 rounded-full shrink-0", statusDot[img.status])} />
+                          {/* Show just the base filename, not the full path */}
+                          <span className="truncate" title={img.filename}>{img.filename.split("/").pop()}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {/* Folder badge — the first two path segments */}
+                          {img.filename.includes("/") && (
+                            <span className={cn("text-[9px] px-1 rounded font-mono shrink-0", isActive ? "bg-white/20" : "bg-muted text-muted-foreground")}>
+                              {folderOfImg}
+                            </span>
+                          )}
+                          <span className={cn("text-[10px] capitalize", isActive ? "text-primary-foreground/70" : "text-muted-foreground")}>{img.status}</span>
+                          {img.annotationCount > 0 && (
+                            <span className={cn("text-[10px] px-1 rounded font-semibold tabular-nums", isActive ? "bg-white/20" : "bg-muted text-muted-foreground")}>
+                              {img.annotationCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Actions for ${img.filename}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={cn(
+                            "absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded transition-opacity",
+                            "opacity-0 group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100",
+                            isActive ? "text-primary-foreground hover:bg-white/10" : "text-muted-foreground hover:bg-accent",
+                          )}
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-44">
+                        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Move to
+                        </DropdownMenuLabel>
+                        {moveTargets.map((f) => (
+                          <DropdownMenuItem
+                            key={f}
+                            onSelect={() => moveImageRequest(img.filename, f)}
+                            className="text-xs"
+                          >
+                            <FolderInput className="h-3.5 w-3.5" />
+                            <span className="font-mono">{f}</span>
+                          </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={() => deleteImageRequest(img.filename)}
+                          variant="destructive"
+                          className="text-xs"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete (move to trash)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                </button>
-              ))
+                );
+              })
             )}
           </div>
         </SidebarContent>

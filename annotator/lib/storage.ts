@@ -4,10 +4,13 @@ import {
   PREFIX_ANN,
   PREFIX_EXP,
   PREFIX_RAW,
+  copyObject,
+  deleteObject,
   getObjectBuffer,
   getObjectText,
   joinKey,
   listKeys,
+  objectExists,
   putObject,
   deleteObjects,
 } from "./r2";
@@ -19,6 +22,76 @@ export const UPLOAD_FOLDERS = [
   "legua/negative",
 ] as const;
 export type UploadFolder = (typeof UPLOAD_FOLDERS)[number];
+
+/** Soft-deleted images live under this prefix (relative to PREFIX_RAW / PREFIX_ANN). */
+const TRASH_PREFIX = "_trash";
+
+function isTrashed(filename: string): boolean {
+  return filename === TRASH_PREFIX || filename.startsWith(TRASH_PREFIX + "/");
+}
+
+// ---------------------------------------------------------------------------
+// Typed errors. Routes use instanceof checks to map to HTTP status codes;
+// keeps status mapping decoupled from message wording.
+// ---------------------------------------------------------------------------
+export class InvalidFilenameError extends Error {
+  constructor(filename: string, reason: string) {
+    super(`Invalid filename "${filename}": ${reason}`);
+    this.name = "InvalidFilenameError";
+  }
+}
+export class NotFoundError extends Error {
+  constructor(filename: string) {
+    super(`Source image not found: ${filename}`);
+    this.name = "NotFoundError";
+  }
+}
+export class AlreadyExistsError extends Error {
+  constructor(filename: string) {
+    super(`Destination already exists: ${filename}`);
+    this.name = "AlreadyExistsError";
+  }
+}
+export class StorageStepError extends Error {
+  readonly step: string;
+  readonly cause: unknown;
+  constructor(step: string, context: Record<string, string>, cause: unknown) {
+    const ctx = Object.entries(context).map(([k, v]) => `${k}=${v}`).join(" ");
+    super(`Storage step "${step}" failed (${ctx}): ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = "StorageStepError";
+    this.step = step;
+    this.cause = cause;
+  }
+}
+
+/** Run an awaitable, wrapping any throw in a StorageStepError that names the
+ *  failed step and includes key context for operator diagnosis. */
+async function step<T>(name: string, context: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[storage] step="${name}" failed`, { ...context, err });
+    throw new StorageStepError(name, context, err);
+  }
+}
+
+/**
+ * Validate that `filename` is a well-formed ACTIVE (non-trashed) raw key.
+ * Catches malformed inputs before they reach R2, so we never copy/delete a key
+ * the rest of the codebase doesn't recognize.
+ */
+function validateActiveFilename(filename: string): void {
+  if (!filename) throw new InvalidFilenameError(filename, "empty");
+  if (filename.startsWith("/")) throw new InvalidFilenameError(filename, "leading slash");
+  if (filename.includes("..")) throw new InvalidFilenameError(filename, "path traversal");
+  if (isTrashed(filename)) throw new InvalidFilenameError(filename, "is trashed");
+  const matches = (UPLOAD_FOLDERS as readonly string[]).some((f) => filename.startsWith(f + "/"));
+  if (!matches) {
+    throw new InvalidFilenameError(filename, `must start with one of: ${UPLOAD_FOLDERS.join(", ")}`);
+  }
+  const basename = filename.split("/").pop();
+  if (!basename) throw new InvalidFilenameError(filename, "missing basename");
+}
 import type { ImageAnnotation, ImageInfo, ImageStatus, ProjectStats } from "./types";
 
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".svg"];
@@ -107,11 +180,42 @@ async function upsertManifestEntry(filename: string, entry: ManifestEntry): Prom
   await writeManifest(m);
 }
 
+/** No-op if entry is absent. Race: read-modify-write, last writer wins. */
+async function deleteManifestEntry(filename: string): Promise<void> {
+  const m = await readManifest();
+  if (!m) {
+    console.warn("[storage] deleteManifestEntry: no manifest", { filename });
+    return;
+  }
+  if (!(filename in m.images)) return;
+  delete m.images[filename];
+  await writeManifest(m);
+}
+
+/**
+ * Rename one entry; preserves status/count. Read-modify-write — last writer
+ * wins on concurrent calls. If the source entry is missing (stale manifest),
+ * insert a default row for `newName` so the moved image stays visible in the
+ * sidebar instead of silently disappearing.
+ */
+async function renameManifestEntry(oldName: string, newName: string): Promise<void> {
+  const m = (await readManifest()) ?? { version: 1, updatedAt: "", images: {} };
+  const entry = m.images[oldName];
+  delete m.images[oldName];
+  if (entry) {
+    m.images[newName] = entry;
+  } else {
+    console.warn("[storage] renameManifestEntry: source entry missing, inserting default", { oldName, newName });
+    m.images[newName] = { status: "unannotated", count: 0 };
+  }
+  await writeManifest(m);
+}
+
 /** Full rescan — expensive but authoritative. Called on first access if no
  *  manifest exists, and manually via the admin UI after bulk uploads. */
 export async function rebuildManifest(): Promise<Manifest> {
   const keys = await listKeys(PREFIX_RAW());
-  const imageKeys = keys.filter(isImageKey).sort();
+  const imageKeys = keys.filter(isImageKey).filter((k) => !isTrashed(rawFilename(k))).sort();
 
   const entries = await Promise.all(imageKeys.map(async (k) => {
     const filename = rawFilename(k);
@@ -136,7 +240,7 @@ export async function getImages(filter?: ImageStatus | "all"): Promise<ImageInfo
   // 1 LIST + 1 GET (manifest) regardless of image count.
   // Falls back to full rescan on first call / after admin reset.
   const [keys, manifest] = await Promise.all([listKeys(PREFIX_RAW()), readManifest()]);
-  const imageKeys = keys.filter(isImageKey).sort();
+  const imageKeys = keys.filter(isImageKey).filter((k) => !isTrashed(rawFilename(k))).sort();
   const m = manifest ?? (await rebuildManifest());
 
   const results: ImageInfo[] = imageKeys.map((k) => {
@@ -220,7 +324,7 @@ export async function updateStatus(
 
 export async function getStats(): Promise<ProjectStats> {
   const [keys, manifest] = await Promise.all([listKeys(PREFIX_RAW()), readManifest()]);
-  const imageKeys = keys.filter(isImageKey);
+  const imageKeys = keys.filter(isImageKey).filter((k) => !isTrashed(rawFilename(k)));
   const m = manifest ?? (await rebuildManifest());
 
   const stats: ProjectStats = {
@@ -241,7 +345,12 @@ export async function getStats(): Promise<ProjectStats> {
 
 export async function getAllLabels(): Promise<string[]> {
   const keys = await listKeys(PREFIX_ANN());
-  const jsonKeys = keys.filter((k) => k.endsWith(".json"));
+  const annPrefix = PREFIX_ANN() + "/";
+  const jsonKeys = keys.filter((k) => {
+    if (!k.endsWith(".json")) return false;
+    const rel = k.startsWith(annPrefix) ? k.slice(annPrefix.length) : k;
+    return !isTrashed(rel);
+  });
   const labelSet = new Set<string>();
 
   const bodies = await Promise.all(jsonKeys.map((k) => getObjectText(k)));
@@ -304,7 +413,7 @@ function deriveYoloBox(ann: import("./types").Annotation): [number, number, numb
 
 async function loadAllAnnotated(): Promise<{ filename: string; data: ImageAnnotation }[]> {
   const keys = await listKeys(PREFIX_RAW());
-  const imageKeys = keys.filter(isImageKey).sort();
+  const imageKeys = keys.filter(isImageKey).filter((k) => !isTrashed(rawFilename(k))).sort();
   const results: { filename: string; data: ImageAnnotation }[] = [];
   const texts = await Promise.all(
     imageKeys.map((k) => getObjectText(annKey(rawFilename(k)))),
@@ -497,4 +606,93 @@ export async function exportYOLO() {
     .map((e) => e[0]);
   await putObject(expKey("classes.txt"), classes.join("\n"), "text/plain");
   return { format: "yolo", files: results.length, classes };
+}
+
+/**
+ * Move an image (and its paired annotation JSON, if any) to a different
+ * canonical folder. The basename is preserved.
+ *
+ * NOT atomic: copy/delete/manifest are independent R2 ops. On partial failure,
+ * the StorageStepError names the failed step and we attempt to roll back the
+ * dest copy if the source delete fails. Operator-visible via console.error.
+ *
+ * Returns the new filename. Throws InvalidFilenameError, NotFoundError,
+ * AlreadyExistsError, or StorageStepError.
+ */
+export async function moveImage(filename: string, destFolder: UploadFolder): Promise<string> {
+  if (!(UPLOAD_FOLDERS as readonly string[]).includes(destFolder)) {
+    throw new InvalidFilenameError(destFolder, "not a valid destination folder");
+  }
+  validateActiveFilename(filename);
+  const basename = filename.split("/").pop()!;
+
+  const newFilename = `${destFolder}/${basename}`;
+  if (newFilename === filename) return filename;
+
+  const srcRaw = rawKey(filename);
+  const dstRaw = rawKey(newFilename);
+  if (await objectExists(dstRaw)) throw new AlreadyExistsError(newFilename);
+  if (!(await objectExists(srcRaw))) throw new NotFoundError(filename);
+
+  await step("move:copy-raw", { srcRaw, dstRaw }, () => copyObject(srcRaw, dstRaw));
+  try {
+    await step("move:delete-raw", { srcRaw }, () => deleteObject(srcRaw));
+  } catch (err) {
+    // Rollback dest so we don't leave a duplicate.
+    await deleteObject(dstRaw).catch((rbErr) =>
+      console.error("[storage] move:rollback-dest-raw failed", { dstRaw, rbErr }),
+    );
+    throw err;
+  }
+
+  const srcAnn = annKey(filename);
+  const dstAnn = annKey(newFilename);
+  if (await objectExists(srcAnn)) {
+    await step("move:copy-ann", { srcAnn, dstAnn }, () => copyObject(srcAnn, dstAnn));
+    await step("move:delete-ann", { srcAnn }, () => deleteObject(srcAnn));
+  }
+
+  await step("move:rename-manifest", { filename, newFilename }, () =>
+    renameManifestEntry(filename, newFilename),
+  );
+  return newFilename;
+}
+
+/**
+ * Soft-delete an image: move it (and its annotation) under _trash/ so it
+ * disappears from the UI but can be recovered out-of-band by an operator.
+ *
+ * Always appends a timestamp to the trashed name so concurrent deletes can't
+ * race the image and annotation onto different timestamps (which would break
+ * the pairing). Returns the trashed key.
+ */
+export async function softDeleteImage(filename: string): Promise<string> {
+  validateActiveFilename(filename);
+  const srcRaw = rawKey(filename);
+  if (!(await objectExists(srcRaw))) throw new NotFoundError(filename);
+
+  const ext = path.extname(filename);
+  const stem = filename.slice(0, filename.length - ext.length);
+  const trashedName = `${TRASH_PREFIX}/${stem}.${Date.now()}${ext}`;
+  const dstRaw = rawKey(trashedName);
+
+  await step("trash:copy-raw", { srcRaw, dstRaw }, () => copyObject(srcRaw, dstRaw));
+  try {
+    await step("trash:delete-raw", { srcRaw }, () => deleteObject(srcRaw));
+  } catch (err) {
+    await deleteObject(dstRaw).catch((rbErr) =>
+      console.error("[storage] trash:rollback-dest-raw failed", { dstRaw, rbErr }),
+    );
+    throw err;
+  }
+
+  const srcAnn = annKey(filename);
+  if (await objectExists(srcAnn)) {
+    const dstAnn = annKey(trashedName);
+    await step("trash:copy-ann", { srcAnn, dstAnn }, () => copyObject(srcAnn, dstAnn));
+    await step("trash:delete-ann", { srcAnn }, () => deleteObject(srcAnn));
+  }
+
+  await step("trash:delete-manifest", { filename }, () => deleteManifestEntry(filename));
+  return trashedName;
 }

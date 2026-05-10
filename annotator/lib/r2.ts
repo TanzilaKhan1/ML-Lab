@@ -7,7 +7,10 @@ import {
   DeleteObjectsCommand,
   ListObjectsV2Command,
   HeadBucketCommand,
+  HeadObjectCommand,
+  CopyObjectCommand,
   NoSuchKey,
+  NotFound,
 } from "@aws-sdk/client-s3";
 
 /**
@@ -105,6 +108,35 @@ export async function getObjectText(key: string): Promise<string | null> {
 /** Delete a single object. Idempotent — does not throw if key is absent. */
 export async function deleteObject(key: string): Promise<void> {
   await client().send(new DeleteObjectCommand({ Bucket: BUCKET(), Key: key }));
+}
+
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await client().send(new HeadObjectCommand({ Bucket: BUCKET(), Key: key }));
+    return true;
+  } catch (err: unknown) {
+    if (err instanceof NotFound || err instanceof NoSuchKey) return false;
+    const httpStatus = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+    if (httpStatus === 404) return false;
+    console.error("[r2] objectExists: unexpected error, rethrowing", { key, err });
+    throw err;
+  }
+}
+
+/** CopySource must be URL-encoded "<bucket>/<key>" — easy S3 footgun. */
+export async function copyObject(srcKey: string, destKey: string): Promise<void> {
+  try {
+    await client().send(
+      new CopyObjectCommand({
+        Bucket: BUCKET(),
+        Key: destKey,
+        CopySource: encodeURIComponent(`${BUCKET()}/${srcKey}`),
+      }),
+    );
+  } catch (err) {
+    console.error("[r2] copyObject failed", { srcKey, destKey, err });
+    throw err;
+  }
 }
 
 /** Delete up to thousands of objects in batched requests (1 000 per call). */
