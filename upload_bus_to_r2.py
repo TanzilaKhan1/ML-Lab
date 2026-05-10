@@ -1,41 +1,36 @@
 """
-One-shot uploader: convert Dataset/{bus,leguna}/{positive,negative}/* to PNG
-(<1 MB each) and upload to
-  s3://machine-learning/raw/bus/{positive,negative}/<base>.png
-  s3://machine-learning/raw/legua/{positive,negative}/<base>.png
+Upload pre-converted PNGs from Dataset_png/{bus,legua}/{positive,negative}/*.png
+to R2 at:
+  s3://<R2_BUCKET>/<R2_PREFIX_RAW>/{bus,legua}/{positive,negative}/<base>.png
 
-Note: local source folder is `leguna/` but the R2 dataset prefix is `legua/`
-(matches the existing UPLOAD_FOLDERS list in annotator/lib/storage.ts).
+Run convert_dataset_to_png.py FIRST. Reads R2 credentials from
+annotator/.env.local. Idempotent at object level (overwrites same key with
+same content; Content-Length matches).
 
-Reads R2 credentials from annotator/.env.local. Does not modify any storage
-code or any object that already exists in the bucket apart from the new keys
-this script writes.
+Run:
+    poetry run python upload_bus_to_r2.py
+or background:
+    nohup poetry run python upload_bus_to_r2.py > upload.log 2>&1 &
 """
 
-import io
 import os
+import random
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import boto3
-from PIL import Image
-import pillow_heif
+from botocore.config import Config
 
-pillow_heif.register_heif_opener()
+ROOT     = Path(__file__).parent
+SRC_DIR  = ROOT / "Dataset_png"
+ENV_FILE = ROOT / "annotator" / ".env.local"
 
-ROOT      = Path(__file__).parent
-SRC_DIR   = ROOT / "Dataset"
-ENV_FILE  = ROOT / "annotator" / ".env.local"
-
-# (local subdir under ml/, R2 dataset name)
-DATASETS = (
-    ("bus",    "bus"),
-    ("leguna", "legua"),
-)
-
-MAX_BYTES = 1_048_576           # strict 1 MB
+DATASETS   = ("bus", "legua")
 SUBFOLDERS = ("positive", "negative")
-EXT_OK = {".heic", ".heif", ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+WORKERS    = 8
+MAX_BYTES  = 1_048_576           # strict 1 MB — must match convert step
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -49,29 +44,82 @@ def load_env(path: Path) -> dict[str, str]:
     return env
 
 
-def encode_png_under_limit(img: Image.Image, limit: int) -> bytes:
-    """Encode as PNG, downscaling by 0.85x until size < limit. RGB to drop alpha."""
-    img = img.convert("RGB")
-    cur = img
-    while True:
-        buf = io.BytesIO()
-        cur.save(buf, format="PNG", optimize=True)
-        data = buf.getvalue()
-        if len(data) < limit:
-            return data
-        new_w = max(1, int(cur.width * 0.85))
-        new_h = max(1, int(cur.height * 0.85))
-        if new_w == cur.width and new_h == cur.height:
-            return data       # cannot shrink further
-        if new_w < 64 or new_h < 64:
-            return data       # don't go absurdly small
-        cur = cur.resize((new_w, new_h), Image.LANCZOS)
+def make_s3(env: dict[str, str]):
+    # Single retry layer: boto3's adaptive mode already handles transient
+    # 5xx/429 with sane backoff. We add an outer app-level retry for the
+    # specific SSL/connection-reset failures we observed against R2 that
+    # boto3 does not retry on its own. To avoid 8x4=32-attempt amplification
+    # on a real outage, the boto3 layer is set to a small max_attempts.
+    cfg = Config(
+        retries={"max_attempts": 3, "mode": "adaptive"},
+        connect_timeout=15,
+        read_timeout=120,
+        max_pool_connections=WORKERS,
+    )
+    return boto3.client(
+        "s3",
+        region_name="auto",
+        endpoint_url=env["R2_ENDPOINT"],
+        aws_access_key_id=env["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=env["R2_SECRET_ACCESS_KEY"],
+        config=cfg,
+    )
+
+
+def collect_jobs(prefix: str) -> list[tuple[Path, str]]:
+    jobs: list[tuple[Path, str]] = []
+    for dataset in DATASETS:
+        for sub in SUBFOLDERS:
+            folder = SRC_DIR / dataset / sub
+            if not folder.is_dir():
+                print(f"WARN: missing folder: {folder}")
+                continue
+            for p in sorted(folder.iterdir()):
+                if p.suffix.lower() != ".png":
+                    continue
+                key = f"{prefix}/{dataset}/{sub}/{p.name}"
+                jobs.append((p, key))
+    return jobs
+
+
+def upload_one(s3, bucket: str, path: Path, key: str) -> tuple[str, str, int]:
+    # Guard the local read so a deleted/permission-flipped file produces a
+    # per-file FAIL row instead of crashing the worker thread (which would
+    # surface as fut.result() raising and terminating the entire upload).
+    try:
+        data = path.read_bytes()
+    except OSError as e:
+        return ("fail", f"{key}: read error: {e}", 0)
+    if len(data) > MAX_BYTES:
+        return ("fail", f"{key}: local file {len(data)} > {MAX_BYTES} (re-run convert)", 0)
+    last_err: Exception | None = None
+    for attempt in range(1, 5):
+        try:
+            s3.put_object(Bucket=bucket, Key=key, Body=data, ContentType="image/png")
+            tag = "" if attempt == 1 else f" (attempt {attempt})"
+            return ("ok", f"{path.name} -> {key}{tag}", len(data))
+        except Exception as e:
+            last_err = e
+            # Log every retry so the failure mode (creds vs throttling vs
+            # network) is debuggable from the run log, not just the final one.
+            if attempt < 4:
+                print(f"  RETRY {key} attempt {attempt}: {e}", file=sys.stderr)
+            # Exponential backoff with jitter — the jitter prevents all 8
+            # worker threads from retrying in lockstep on a transient outage.
+            base = 0.5 * (2 ** (attempt - 1))         # 0.5, 1, 2, 4s
+            time.sleep(base + random.uniform(0, 0.5))
+    return ("fail", f"{key}: {last_err}", 0)
 
 
 def main() -> int:
     if not ENV_FILE.exists():
         print(f"ERROR: env file not found: {ENV_FILE}", file=sys.stderr)
         return 1
+    if not SRC_DIR.is_dir():
+        print(f"ERROR: source dir not found: {SRC_DIR}. "
+              f"Run convert_dataset_to_png.py first.", file=sys.stderr)
+        return 1
+
     env = load_env(ENV_FILE)
     required = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_ENDPOINT", "R2_BUCKET"]
     missing = [k for k in required if not env.get(k)]
@@ -79,78 +127,38 @@ def main() -> int:
         print(f"ERROR: missing env vars in {ENV_FILE}: {missing}", file=sys.stderr)
         return 1
 
-    bucket   = env["R2_BUCKET"]
-    prefix   = env.get("R2_PREFIX_RAW", "raw")
-    endpoint = env["R2_ENDPOINT"]
+    bucket = env["R2_BUCKET"]
+    prefix = env.get("R2_PREFIX_RAW", "raw")
 
     print(f"R2 bucket   : {bucket}")
-    print(f"R2 endpoint : {endpoint}")
+    print(f"R2 endpoint : {env['R2_ENDPOINT']}")
     print(f"Raw prefix  : {prefix}")
     print(f"Source dir  : {SRC_DIR}")
     print()
 
-    s3 = boto3.client(
-        "s3",
-        region_name="auto",
-        endpoint_url=endpoint,
-        aws_access_key_id=env["R2_ACCESS_KEY_ID"],
-        aws_secret_access_key=env["R2_SECRET_ACCESS_KEY"],
-    )
+    s3   = make_s3(env)
+    jobs = collect_jobs(prefix)
+    print(f"Files to upload: {len(jobs)}")
+    print()
 
-    counters = {"uploaded": 0, "skipped": 0, "failed": 0}
+    counters = {"ok": 0, "fail": 0}
+    total_bytes = 0
 
-    for local_name, dataset in DATASETS:
-        for sub in SUBFOLDERS:
-            folder = SRC_DIR / local_name / sub
-            if not folder.is_dir():
-                print(f"WARN: folder missing: {folder}")
-                continue
-            files = sorted(p for p in folder.iterdir()
-                           if p.is_file() and p.suffix.lower() in EXT_OK)
-            print(f"[{dataset}/{sub}] {len(files)} candidate files (from {local_name}/{sub})")
-
-            for path in files:
-                base = path.stem               # IMG_3477
-                key  = f"{prefix}/{dataset}/{sub}/{base}.png"
-
-                try:
-                    img = Image.open(path)
-                    # Force decode now so HEIC/EXIF errors surface here
-                    img.load()
-                except Exception as e:
-                    print(f"  FAIL  decode {path.name}: {e}")
-                    counters["failed"] += 1
-                    continue
-
-                try:
-                    data = encode_png_under_limit(img, MAX_BYTES)
-                except Exception as e:
-                    print(f"  FAIL  encode {path.name}: {e}")
-                    counters["failed"] += 1
-                    continue
-
-                if len(data) >= MAX_BYTES:
-                    print(f"  WARN  {path.name}: still {len(data)} bytes after downscale")
-
-                try:
-                    s3.put_object(
-                        Bucket=bucket,
-                        Key=key,
-                        Body=data,
-                        ContentType="image/png",
-                    )
-                except Exception as e:
-                    print(f"  FAIL  upload {key}: {e}")
-                    counters["failed"] += 1
-                    continue
-
-                print(f"  OK    {path.name:24s} -> {key}  ({len(data)/1024:.0f} KB)")
-                counters["uploaded"] += 1
+    with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+        futs = [ex.submit(upload_one, s3, bucket, p, k) for p, k in jobs]
+        for fut in as_completed(futs):
+            status, msg, n = fut.result()
+            counters[status] += 1
+            if status == "ok":
+                total_bytes += n
+                print(f"  OK    {msg}  ({n/1024:.0f} KB)")
+            else:
+                print(f"  FAIL  {msg}")
 
     print()
-    print(f"Uploaded : {counters['uploaded']}")
-    print(f"Failed   : {counters['failed']}")
-    return 0 if counters["failed"] == 0 else 2
+    print(f"Uploaded : {counters['ok']}  ({total_bytes/1024/1024:.1f} MB)")
+    print(f"Failed   : {counters['fail']}")
+    return 0 if counters["fail"] == 0 else 2
 
 
 if __name__ == "__main__":

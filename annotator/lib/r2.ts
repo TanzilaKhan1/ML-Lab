@@ -63,11 +63,20 @@ export async function pingBucket(): Promise<void> {
   await client().send(new HeadBucketCommand({ Bucket: BUCKET() }));
 }
 
-/** Put an object. body can be Buffer, Uint8Array, or string. */
+/** Put an object. body can be Buffer, Uint8Array, or string.
+ *
+ *  Optional user-defined metadata is stored as x-amz-meta-* and returned by
+ *  getObjectBuffer. S3/R2 constraints to respect:
+ *    - keys are lowercased on storage (use lowercase to round-trip identically)
+ *    - keys and values must be ASCII
+ *    - combined header size capped at ~2 KB by most S3-compatible stores
+ *  Hyphens in keys are preserved by R2/S3.
+ */
 export async function putObject(
   key: string,
   body: Buffer | Uint8Array | string,
   contentType?: string,
+  metadata?: Record<string, string>,
 ): Promise<void> {
   await client().send(
     new PutObjectCommand({
@@ -75,12 +84,15 @@ export async function putObject(
       Key: key,
       Body: body,
       ContentType: contentType,
+      Metadata: metadata,
     }),
   );
 }
 
 /** Get an object body as a Buffer. Returns null if the key does not exist. */
-export async function getObjectBuffer(key: string): Promise<{ body: Buffer; contentType?: string } | null> {
+export async function getObjectBuffer(
+  key: string,
+): Promise<{ body: Buffer; contentType?: string; metadata?: Record<string, string> } | null> {
   try {
     const out = await client().send(
       new GetObjectCommand({ Bucket: BUCKET(), Key: key }),
@@ -89,7 +101,7 @@ export async function getObjectBuffer(key: string): Promise<{ body: Buffer; cont
     // AWS SDK v3 Body is a ReadableStream / Blob / Readable. transformToByteArray() handles all.
     const bytes = await (out.Body as unknown as { transformToByteArray: () => Promise<Uint8Array> })
       .transformToByteArray();
-    return { body: Buffer.from(bytes), contentType: out.ContentType };
+    return { body: Buffer.from(bytes), contentType: out.ContentType, metadata: out.Metadata };
   } catch (err: unknown) {
     if (err instanceof NoSuchKey) return null;
     // Some S3-compatible stores return a 404 without NoSuchKey subclass
