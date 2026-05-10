@@ -50,7 +50,6 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sidebar,
   SidebarContent,
@@ -175,10 +174,11 @@ function ImageThumb({ filename }: { filename: string }) {
       {visible ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/api/raw/${encodeFilePath(filename)}`}
+          src={`/api/derived/thumb/${encodeFilePath(filename)}`}
           alt=""
           className="w-full h-full object-cover"
           loading="lazy"
+          decoding="async"
           draggable={false}
         />
       ) : (
@@ -251,6 +251,12 @@ export default function AnnotatorPage() {
   const imageDims = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoSaveAbortRef = useRef<AbortController | null>(null);
+  // Per-image-load abort: torn down on stale so previous loads stop
+  // consuming bandwidth/decoding when the user switches images quickly.
+  const loadAbortRef = useRef<AbortController | null>(null);
+  // O(1) label lookup for object:modified — populated by renderAnnotations,
+  // keyed by annotationId, value is the FabricText label object.
+  const labelMap = useRef<Map<string, any>>(new Map());
   const isPanning = useRef(false);
   const panStart = useRef<{ x: number; y: number } | null>(null);
   const spaceHeld = useRef(false);
@@ -316,7 +322,6 @@ export default function AnnotatorPage() {
       window.removeEventListener("beforeunload", flush);
       document.removeEventListener("visibilitychange", onHide);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // refs only — intentionally empty deps
 
   const fetchImages = useCallback(async () => {
@@ -355,6 +360,7 @@ export default function AnnotatorPage() {
 
     const toRemove = c.getObjects().filter((o: any) => !o.isBackgroundImage);
     for (const obj of toRemove) c.remove(obj);
+    labelMap.current.clear();
 
     const opacityHex = Math.round((opacityRef.current / 100) * 255).toString(16).padStart(2, "0");
 
@@ -372,6 +378,10 @@ export default function AnnotatorPage() {
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 8,
           transparentCorners: false, borderColor: ann.color,
           lockRotation: false,
+          // Static (non-selected/non-interactive) shapes get raster-cached so
+          // the canvas only re-rasterizes on modify, not every frame.
+          objectCaching: !interactive,
+          noScaleCache: false,
         });
         // Make the rotation handle clearly visible: a larger circle rendered
         // 44px above the top-center of the bounding box.
@@ -432,6 +442,8 @@ export default function AnnotatorPage() {
           fontFamily: "Inter, sans-serif",
         });
         (text as any).isLabel = true;
+        (text as any).annotationId = ann.id;
+        labelMap.current.set(ann.id, text);
         c.add(rect); c.add(text);
       } else if (ann.type === "ellipse") {
         const rx = (ann.width || 0) / 2;
@@ -444,6 +456,8 @@ export default function AnnotatorPage() {
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 8,
           transparentCorners: false, borderColor: ann.color,
           lockRotation: true,
+          objectCaching: !interactive,
+          noScaleCache: false,
         });
         (ellipse as any).annotationId = ann.id;
         (ellipse as any).annotationType = "ellipse";
@@ -454,6 +468,8 @@ export default function AnnotatorPage() {
           fontFamily: "Inter, sans-serif",
         });
         (text as any).isLabel = true;
+        (text as any).annotationId = ann.id;
+        labelMap.current.set(ann.id, text);
         c.add(ellipse); c.add(text);
       } else if (ann.type === "polygon" && ann.points) {
         const points = ann.points.map((p: number[]) => new fabric.Point(p[0], p[1]));
@@ -462,7 +478,10 @@ export default function AnnotatorPage() {
           strokeUniform: true,
           selectable: interactive, evented: interactive,
           lockRotation: true,
-          objectCaching: false,
+          // Static polygons cache fine; interactive ones disable cache so
+          // per-vertex drag mutations stay pixel-accurate.
+          objectCaching: !interactive,
+          noScaleCache: false,
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 9,
           transparentCorners: false, borderColor: ann.color,
           cornerStyle: "circle",
@@ -480,6 +499,8 @@ export default function AnnotatorPage() {
           fontFamily: "Inter, sans-serif",
         });
         (text as any).isLabel = true;
+        (text as any).annotationId = ann.id;
+        labelMap.current.set(ann.id, text);
         c.add(polygon); c.add(text);
       } else if (ann.type === "polyline" && ann.points) {
         const points = ann.points.map((p: number[]) => new fabric.Point(p[0], p[1]));
@@ -488,7 +509,8 @@ export default function AnnotatorPage() {
           strokeUniform: true,
           selectable: interactive, evented: interactive,
           lockRotation: true,
-          objectCaching: false,
+          objectCaching: !interactive,
+          noScaleCache: false,
           cornerColor: "#fff", cornerStrokeColor: ann.color, cornerSize: 9,
           transparentCorners: false, borderColor: ann.color,
           cornerStyle: "circle",
@@ -506,6 +528,8 @@ export default function AnnotatorPage() {
           fontFamily: "Inter, sans-serif",
         });
         (text as any).isLabel = true;
+        (text as any).annotationId = ann.id;
+        labelMap.current.set(ann.id, text);
         c.add(polyline); c.add(text);
       } else if (ann.type === "keypoint") {
         const outerCircle = new fabric.Circle({
@@ -527,7 +551,9 @@ export default function AnnotatorPage() {
           fill: "#fff", strokeWidth: 0,
           selectable: false, evented: false,
         });
-        (center as any).isLabel = true;
+        // Decoration only; not a label, has no annotationId. Skipped by the
+        // `isLabel && annotationId` guard in object:modified's label-finder.
+        (center as any).isDecoration = true;
         const text = new fabric.FabricText(ann.label, {
           left: (ann.x || 0) + 14, top: (ann.y || 0) - 8,
           fontSize: 11, fill: "#fff", backgroundColor: ann.color + "DD",
@@ -535,6 +561,8 @@ export default function AnnotatorPage() {
           fontFamily: "Inter, sans-serif",
         });
         (text as any).isLabel = true;
+        (text as any).annotationId = ann.id;
+        labelMap.current.set(ann.id, text);
         c.add(outerCircle); c.add(circle); c.add(center); c.add(text);
       }
     }
@@ -921,38 +949,163 @@ export default function AnnotatorPage() {
     if (!canvas) { setIsLoading(false); return; }
 
     canvas.clear();
+    labelMap.current.clear();
     canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
-    let img: any;
-    try {
-      const fabric = await import("fabric");
-      img = await fabric.FabricImage.fromURL(
-        `/api/raw/${encodeFilePath(filename)}`,
-        { crossOrigin: "anonymous" },
-      );
-    } catch (err) {
-      if (stale()) return;
-      setIsLoading(false);
-      toast.error("Failed to load image", { description: String(err) });
-      return;
-    }
-    if (stale()) return;
+    // Cancel any previous in-flight image fetches so rapid arrow-key navigation
+    // doesn't pile up bandwidth + decoded pixel buffers in memory.
+    loadAbortRef.current?.abort();
+    const ac = new AbortController();
+    loadAbortRef.current = ac;
 
-    imageDims.current = { width: img.width || 0, height: img.height || 0 };
-    setImageDimState({ width: img.width || 0, height: img.height || 0 });
+    // Progressive load:
+    //   1) fetch the small preview WebP and decode off-thread, paint it scaled
+    //      UP to true raw dims so the user sees something while raw is fetching
+    //   2) in parallel, fetch the full raw and atomically swap it in when ready
+    // Trade: extra preview bandwidth for lower time-to-first-paint. Both fetches
+    // run concurrently; the raw is downloaded regardless. Scene coords are
+    // always in TRUE raw-pixel space: preview is rendered with scaleX/Y =
+    // trueDim/previewDim, so any annotation drawn during the preview phase is
+    // already in raw coords; the swap is a no-op for coords.
+    const fabric = await import("fabric");
 
-    // Background image at origin with scale 1 — scene coords = image pixels.
-    img.set({
-      left: 0, top: 0, scaleX: 1, scaleY: 1,
-      selectable: false, evented: false, hoverCursor: "default",
+    /** Fetch + decode an image off the main thread via HTMLImageElement.decode().
+     *  Per HTML spec, decode() runs on the browser's image-decoding worker
+     *  rather than blocking the main thread on first paint.
+     *  Returns headers (for derived dims) and the decoded element. */
+    const fetchAndDecode = async (
+      url: string,
+      signal: AbortSignal,
+    ): Promise<{ el: HTMLImageElement; w: number; h: number; headers: Headers } | null> => {
+      const res = await fetch(url, { signal });
+      if (!res.ok) {
+        console.warn("[loadImage] fetch non-2xx", { url, status: res.status });
+        return null;
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        const el = new Image();
+        el.crossOrigin = "anonymous";
+        el.decoding = "async";
+        el.src = blobUrl;
+        await el.decode();
+        return { el, w: el.naturalWidth, h: el.naturalHeight, headers: res.headers };
+      } finally {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+
+    const previewUrl = `/api/derived/preview/${encodeFilePath(filename)}`;
+    const rawUrl = `/api/raw/${encodeFilePath(filename)}`;
+
+    // Kick off raw fetch in parallel; consume it after preview paints.
+    const rawPromise = fetchAndDecode(rawUrl, ac.signal).catch((err) => {
+      if (err?.name === "AbortError") return null;
+      console.error("[loadImage] raw decode failed", { filename, err });
+      return null;
     });
-    (img as any).isBackgroundImage = true;
-    canvas.add(img); canvas.sendObjectToBack(img);
 
-    renderAnnotations(data.annotations || [], canvas);
-    // Fit on the next frame so the container's final layout (post-load, post-
-    // font-settle) is reflected in the measurements. Belt + braces: also run
-    // a short-delay retry because some browsers settle layout a beat late.
+    let trueW = data.imageWidth || 0;
+    let trueH = data.imageHeight || 0;
+    let previewImg: any = null;
+    let lastError: unknown = null;
+    let annotationsRendered = false;
+
+    try {
+      const dec = await fetchAndDecode(previewUrl, ac.signal);
+      if (dec) {
+        const hw = Number(dec.headers.get("X-Original-Width") || 0);
+        const hh = Number(dec.headers.get("X-Original-Height") || 0);
+        if (hw && hh) { trueW = hw; trueH = hh; }
+        if (!trueW || !trueH) { trueW = dec.w; trueH = dec.h; }
+        previewImg = new fabric.FabricImage(dec.el);
+        previewImg.set({
+          left: 0, top: 0,
+          scaleX: trueW / dec.w, scaleY: trueH / dec.h,
+          selectable: false, evented: false, hoverCursor: "default",
+        });
+        (previewImg as any).isBackgroundImage = true;
+        (previewImg as any).isPreview = true;
+      }
+    } catch (err) {
+      if ((err as { name?: string })?.name !== "AbortError") {
+        lastError = err;
+        console.warn("[loadImage] preview unavailable, will wait for raw", err);
+      }
+    }
+    if (stale() || ac.signal.aborted) return;
+
+    if (previewImg) {
+      canvas.add(previewImg);
+      canvas.sendObjectToBack(previewImg);
+      imageDims.current = { width: trueW, height: trueH };
+      setImageDimState({ width: trueW, height: trueH });
+      renderAnnotations(data.annotations || [], canvas);
+      annotationsRendered = true;
+      requestAnimationFrame(() => {
+        if (stale()) return;
+        centerAndFitImage();
+        canvas.requestRenderAll();
+      });
+    }
+
+    // Wait for the full raw, then atomically swap it for the preview.
+    const rawDecoded = await rawPromise;
+    if (stale() || ac.signal.aborted) return;
+
+    if (!rawDecoded) {
+      if (!previewImg) {
+        setIsLoading(false);
+        toast.error("Failed to load image", {
+          description: lastError ? `${filename}: ${String(lastError)}` : filename,
+        });
+        return;
+      }
+      // Raw failed but preview rendered — warn so the user knows they're
+      // looking at a downscaled image and may want to retry before drawing
+      // pixel-precise annotations.
+      toast.warning("Showing preview", {
+        description: "Full-resolution image failed to load. Reload the page to retry.",
+      });
+    } else {
+      let fullImg: any;
+      try {
+        fullImg = new fabric.FabricImage(rawDecoded.el);
+        fullImg.set({
+          left: 0, top: 0, scaleX: 1, scaleY: 1,
+          selectable: false, evented: false, hoverCursor: "default",
+        });
+        (fullImg as any).isBackgroundImage = true;
+        // ADD-then-REMOVE order: if FabricImage construction or canvas.add
+        // throws, the preview stays on screen instead of leaving the user
+        // with a blank background. After add succeeds, remove the preview.
+        canvas.add(fullImg);
+        canvas.sendObjectToBack(fullImg);
+        if (previewImg) {
+          canvas.remove(previewImg);
+          previewImg = null;
+        }
+        // Authoritative dims come from the raw element.
+        trueW = rawDecoded.w;
+        trueH = rawDecoded.h;
+        imageDims.current = { width: trueW, height: trueH };
+        setImageDimState({ width: trueW, height: trueH });
+      } catch (err) {
+        console.error("[loadImage] raw swap failed; keeping preview", err);
+        toast.warning("Showing preview", {
+          description: "Failed to upgrade to full resolution.",
+        });
+      }
+    }
+
+    // First-load path (no preview was ever painted) — render now.
+    if (!annotationsRendered && rawDecoded) {
+      renderAnnotations(data.annotations || [], canvas);
+    }
+    // renderOnAddRemove is false — every code path that mutates the canvas
+    // MUST call requestRenderAll() or the change will not be visible.
+    canvas.requestRenderAll();
     requestAnimationFrame(() => {
       if (stale()) return;
       centerAndFitImage();
@@ -976,6 +1129,11 @@ export default function AnnotatorPage() {
         width: container.clientWidth, height: container.clientHeight,
         selection: false, preserveObjectStacking: true,
         defaultCursor: "crosshair",
+        // Sharp lines on retina; smooth upscaled image bg.
+        enableRetinaScaling: true,
+        imageSmoothingEnabled: true,
+        // Manual control of when to paint — we batch with requestRenderAll().
+        renderOnAddRemove: false,
       });
       fabricRef.current = canvas;
 
@@ -1291,9 +1449,35 @@ export default function AnnotatorPage() {
           obj.set({ scaleX: 1, scaleY: 1, rx: (obj.rx || 0) * obj.scaleX, ry: (obj.ry || 0) * obj.scaleY });
         }
 
+        // Reposition the label inline instead of rebuilding ALL fabric objects.
+        // Full rebuild used to fire on every drag frame — O(N) per modify event,
+        // 60Hz during drag, was the dominant CPU cost on large annotation sets.
+        // Map lookup keeps this O(1) regardless of how many annotations exist.
+        const label = labelMap.current.get(id);
+        if (label) {
+          if (type === "bbox") {
+            const angle = ((obj.angle || 0) % 360 + 360) % 360;
+            const rad = (angle * Math.PI) / 180;
+            const lx = 2, ly = -20;
+            label.set({
+              left: (obj.left || 0) + lx * Math.cos(rad) - ly * Math.sin(rad),
+              top:  (obj.top  || 0) + lx * Math.sin(rad) + ly * Math.cos(rad),
+              angle,
+            });
+          } else if (type === "ellipse") {
+            label.set({ left: (obj.left || 0) + 2, top: (obj.top || 0) - 20 });
+          } else if (type === "polygon" || type === "polyline") {
+            const b = obj.getBoundingRect();
+            label.set({ left: b.left + 2, top: b.top - 20 });
+          } else if (type === "keypoint") {
+            label.set({ left: (obj.left || 0) + 14, top: (obj.top || 0) - 8 });
+          }
+          label.setCoords();
+        }
+
         setAnnotations(newAnns); annotationsRef.current = newAnns;
         scheduleAutoSave(newAnns, true);
-        requestAnimationFrame(() => renderAnnotations(newAnns, canvas));
+        canvas.requestRenderAll();
       });
 
       // --- RESIZE: ResizeObserver tracks layout changes (sidebar collapse,
@@ -1330,7 +1514,12 @@ export default function AnnotatorPage() {
 
     init();
 
+    // Capture refs at effect-init time so cleanup uses the same identities
+    // (React lint guards against ref churn between mount and unmount).
+    const labels = labelMap.current;
     return () => {
+      loadAbortRef.current?.abort();
+      labels.clear();
       const c = fabricRef.current;
       if (c) { c.dispose(); fabricRef.current = null; }
     };
@@ -1349,8 +1538,15 @@ export default function AnnotatorPage() {
 
     c.getObjects().forEach((obj: any) => {
       if (!obj.isBackgroundImage && !obj.isLabel && obj.annotationId) {
-        obj.set("selectable", activeTool === "select");
-        obj.set("evented", activeTool === "select");
+        const interactive = activeTool === "select";
+        obj.set("selectable", interactive);
+        obj.set("evented", interactive);
+        // Keep objectCaching in sync with interactive state. Otherwise a
+        // shape created in the now-stale state would either be raster-cached
+        // while interactive (producing blurry drag previews) or uncached
+        // while static (wasting CPU per frame).
+        obj.set("objectCaching", !interactive);
+        obj.dirty = true;
       }
     });
     c.discardActiveObject();

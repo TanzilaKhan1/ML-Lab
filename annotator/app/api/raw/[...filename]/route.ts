@@ -20,7 +20,9 @@ export async function GET(
     headers: {
       "Content-Type": img.contentType,
       "Content-Length": img.body.byteLength.toString(),
-      "Cache-Control": "private, max-age=300",
+      // Raw objects are content-addressed by name and never mutate in place.
+      // Long-lived browser cache eliminates re-fetches when revisiting images.
+      "Cache-Control": "public, max-age=31536000, immutable",
     },
   });
 }

@@ -809,6 +809,68 @@ tests = ["check-manifest", "coverage (>=7.4.2)", "defusedxml", "markdown2", "ole
 xmp = ["defusedxml"]
 
 [[package]]
+name = "pyoxipng"
+version = "9.1.1"
+description = "Python wrapper for multithreaded .png image file optimizer oxipng"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "sys_platform == \"win32\" or sys_platform == \"emscripten\" or sys_platform != \"win32\" and sys_platform != \"emscripten\""
+files = [
+    {file = "pyoxipng-9.1.1-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:54ff2cf2f1418eca361a42774c54bd9a34d6d632d87dc26089d8644e9a9cb519"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:3710eed13f1d14fb841d6bce0c4e8978a1e53558f536223b58af110d1c50443f"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:a460589fbbfa0a1f05e636751265c463479ab9ec16c5ca70c11051822ad055ff"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:390b14c8ff56f112c46b7416e16a7a27db06489eb55ec0060fd4d67c29d78158"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:35a54d1c9957fa7ff41e937e6346577297a403f81a1631eeb4f8c2f061df600c"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:803221f48c2583695d5eb45c06f6909c5722a295e0d877b97dc0ede06966afa4"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:b0e7b7d7f8f16d15fd53c0bf12225d575d230e487a780778a11604eff2347110"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:9843db526703ae88d869695bef25e5f75f98fed338b9f508f1b258f95fef598d"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-win32.whl", hash = "sha256:d9b3249b6edc558461610e3b01a377e6160ee8de72494e9df8fedec699e76d0f"},
+    {file = "pyoxipng-9.1.1-cp310-cp310-win_amd64.whl", hash = "sha256:f43b42d84736dd4944a0d18cebc80cb89f0d0b8aea476e2714cd6afc19e1997d"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:dee84d2d6fdfdfc0f2958f3953fbadd18d6118d55b3f0f18e5447cc9d1b84539"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:2b2f362d40906cb3ede7c919505184e6b2c94c64abd4ddc63734dacbdc38681c"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:ef92f2284ec696f2cba1c6403ece87a5355ffc6b78a2111fecf4ffdfee70f626"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:6b53431f9f4651daecc113d53719824dd83591ff59edd7a2b07d277a257c82c7"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:f35a36d3675cb431a5d8a7e4a1b72ac5693303bd29d795cf608f147a14b24fed"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-musllinux_1_2_armv7l.whl", hash = "sha256:6b6fb85b976521cc2fa987b9ec392b66a437d56a07b7f691c4911e26c30d4d24"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:17e75a18ef6405cc0850994abf7cc78ed2b2afd5c3c3443aca60b35e7896c7f5"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:fbc4d5cca8d0d453090618cd3f250dbc98212a3693055cc48922485c210826de"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-win32.whl", hash = "sha256:5ef7183b082a715bf2a53a20964df713d9944659dbcf9521258834e6ecc6df38"},
+    {file = "pyoxipng-9.1.1-cp311-cp311-win_amd64.whl", hash = "sha256:327d065925cec7972b744f30e890e1c3ca3d47908b5e8474ebba389dbdd627e1"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:dd262203be827a9cbd176f024baad1c6ba980393ff1d19a144b34ef2533ee1a0"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:6f3a8df3afc9fdb3543c0cbc6b6e963e788650bd1bdb89a05a3e1fa276a9c63a"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:3d6e3982e563c56732da3493b76b616b625e8072b10542081832184fdba8bcdf"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:f7771b81d6a81b9b4e9f70a7e0d982a4d9d33054842050aeef5cae116d915a57"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:3e5281dfa33aa716bcddb59010609f27d1d82e39342ae6d03c7c714c78d4b3cf"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-musllinux_1_2_armv7l.whl", hash = "sha256:14fc4633e182b279837759c8992df18475f3334481efb5582d4f176b3675eb48"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:75decb289ad548bd1384b9034571e506ef883380be05fa3090431f039aa08513"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:e3307254a6766599c2ec6a1252f1e778d600c9f162cde7e084d944084a734d84"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-win32.whl", hash = "sha256:45381a5279240ecdf33561075f9868b95f9532d12360b5f3254bedf1cfce8c29"},
+    {file = "pyoxipng-9.1.1-cp312-cp312-win_amd64.whl", hash = "sha256:120c286665ba2a8e86a9c91ee51067c9bebc53c0a2ebb38cb558217a70ee8a1d"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:4ca1d27a90e8adaeefe1d1fbc5f754021fa0f50fec240fff644635b91423cf2d"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:c1af73961a090209c1bc79d75942ee45955b4b47b53939fe49a036a9943e2472"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:020fe8bdbbc9dd06064beb14c33a44d5d3d3e6c3365e92795ecffb716cdce093"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:a71024ec9660253fd8ab09e0af5e66aaa973fb31cc34a4f193aab8c5b7518d91"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:48dd91f27ed93c3ce13e4705b8d3e82c14d10d02e0fb27518076c7363472edf5"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:bbefa908c057d654d213d99ed2201cba1aa382ff41e37eb1580423fbe88228fa"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:f49e49f1043ba7f83779b7b70c86dddbe75a591726113ba17ba78fab96a363e9"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:02c8df2c62c6ed09d9ae07b83481481bb707faf1e91244d1e7c2a8ef0357cc3c"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-win32.whl", hash = "sha256:f7b29240fac6be4e3b1d9db2398d251ddf127030faffdfff639d910695b68537"},
+    {file = "pyoxipng-9.1.1-cp313-cp313-win_amd64.whl", hash = "sha256:9b807afd9e93d7f41cf74e6a23fba390b40004777ec70081543cb9ef62834d5e"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-macosx_10_12_x86_64.whl", hash = "sha256:6eafa8ef8f15dc047328155ec4f4f6e229b747a64baeb8906be2e3b0f3b4f259"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:a866134aae2643219258a2f7b98a34d7f44820e525e338b5c480ee5e1e3bfb85"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:470c752206747fc5e626fb45598ad21086397b99010cce4e618edba1a8cc91bb"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:32a87a9ff06b380a061ef888c0c0f29efa99a58c859aa19f3e340c31f18f1aff"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:6fd72517b44a004948507710d651e2561d1aa4c9ea7d604e4aa8dbf4605ecbf5"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-musllinux_1_2_armv7l.whl", hash = "sha256:f9b0873d56217b793b069453b6376c7dbe550e683488d825b750c7f4f5659e2f"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:c7cf686e4aad8514d33fc15408d06b9f717d6e16b96aa8b999229ef3e048a8db"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:3576ad359cf03d3787d04fcd593b42ae9ef74329590d8fbbddd1af3a30e46d73"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-win32.whl", hash = "sha256:de71446521adebf9c826280b9001ba53cc084557799e8e6307d7d3054c770a2d"},
+    {file = "pyoxipng-9.1.1-cp39-cp39-win_amd64.whl", hash = "sha256:d26c91f649a6174a5c00126a292549f79a2323887794e3c5e1463ac5e75991ac"},
+    {file = "pyoxipng-9.1.1.tar.gz", hash = "sha256:c9c3c087b0c744ba9b709a321c61183668f024c138748a8da565fe89a4bf0fb8"},
+]
+
+[[package]]
 name = "pyparsing"
 version = "3.3.2"
 description = "pyparsing - Classes and methods to define and execute parsing grammars"
@@ -1176,4 +1238,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "8f5aa301c3889351941c29458c3893c7671bde1fb00f15e5e886727945d05858"
+content-hash = "0d52a020d497f1fc2b1a9e0c0226956c3b9216205cfc0bd0b97ca63958997104"

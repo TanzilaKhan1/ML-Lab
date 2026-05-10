@@ -411,21 +411,6 @@ function deriveYoloBox(ann: import("./types").Annotation): [number, number, numb
   return null;
 }
 
-async function loadAllAnnotated(): Promise<{ filename: string; data: ImageAnnotation }[]> {
-  const keys = await listKeys(PREFIX_RAW());
-  const imageKeys = keys.filter(isImageKey).filter((k) => !isTrashed(rawFilename(k))).sort();
-  const results: { filename: string; data: ImageAnnotation }[] = [];
-  const texts = await Promise.all(
-    imageKeys.map((k) => getObjectText(annKey(rawFilename(k)))),
-  );
-  for (let i = 0; i < imageKeys.length; i++) {
-    const data = safeJsonParse<ImageAnnotation>(texts[i]);
-    if (!data) continue;
-    results.push({ filename: rawFilename(imageKeys[i]), data });
-  }
-  return results;
-}
-
 export async function exportCOCO() {
   const annotated = await loadAllAnnotated();
 
@@ -563,12 +548,26 @@ export async function clearAllData(): Promise<{ raw: number; annotations: number
   return { raw: rawCount, annotations: annCount };
 }
 
-export async function exportYOLO() {
-  const annotated = await loadAllAnnotated();
+/** One YOLO label set for a single image: the file's text body and the
+ *  number of label lines it contains (so callers don't need to re-parse). */
+export interface YoloFile { text: string; count: number }
 
+/**
+ * Pure helper: turn every annotated image into YOLO label text + classes list.
+ * No I/O — callers (exportYOLO, zip exporter) decide where to put the bytes.
+ *
+ * Returned `files` map is keyed by the original image filename
+ * ("bus/positive/x.png"). Returned `classes` array is invariant: `classes[i]`
+ * is the human label corresponding to integer class id `i` written in the
+ * label files. `count` lets callers report per-file annotation totals
+ * without re-splitting the label text.
+ */
+export function buildYoloLabels(
+  annotated: { filename: string; data: ImageAnnotation }[],
+): { files: Map<string, YoloFile>; classes: string[] } {
   const categoryMap: Record<string, number> = {};
   let catId = 0;
-  const results: { file: string; annotations: number }[] = [];
+  const files = new Map<string, YoloFile>();
 
   for (const { filename, data } of annotated) {
     if (data.status === "rejected") continue;
@@ -578,34 +577,54 @@ export async function exportYOLO() {
     const lines: string[] = [];
 
     for (const ann of data.annotations || []) {
-      if (!(ann.label in categoryMap)) {
-        categoryMap[ann.label] = catId++;
-      }
-      // YOLO only consumes axis-aligned boxes. Include bbox + ellipse (both
-      // carry x/y/width/height) and derive a tight box for polygon/polyline.
+      if (!(ann.label in categoryMap)) categoryMap[ann.label] = catId++;
       const yoloBox = deriveYoloBox(ann);
-      if (yoloBox) {
-        const [x, y, w, h] = yoloBox;
-        const cx = (x + w / 2) / imgW;
-        const cy = (y + h / 2) / imgH;
-        lines.push(
-          `${categoryMap[ann.label]} ${cx.toFixed(6)} ${cy.toFixed(6)} ${(w / imgW).toFixed(6)} ${(h / imgH).toFixed(6)}`,
-        );
-      }
+      if (!yoloBox) continue;
+      const [x, y, w, h] = yoloBox;
+      const cx = (x + w / 2) / imgW;
+      const cy = (y + h / 2) / imgH;
+      lines.push(
+        `${categoryMap[ann.label]} ${cx.toFixed(6)} ${cy.toFixed(6)} ${(w / imgW).toFixed(6)} ${(h / imgH).toFixed(6)}`,
+      );
     }
 
-    if (lines.length > 0) {
-      const yoloKey = expKey(filename.replace(/\.[^.]+$/, ".txt"));
-      await putObject(yoloKey, lines.join("\n"), "text/plain");
-      results.push({ file: filename, annotations: lines.length });
-    }
+    if (lines.length > 0) files.set(filename, { text: lines.join("\n"), count: lines.length });
   }
 
   const classes = Object.entries(categoryMap)
     .sort((a, b) => a[1] - b[1])
     .map((e) => e[0]);
+  return { files, classes };
+}
+
+export async function exportYOLO() {
+  const annotated = await loadAllAnnotated();
+  const { files, classes } = buildYoloLabels(annotated);
+
+  const results: { file: string; annotations: number }[] = [];
+  for (const [filename, { text, count }] of files) {
+    const yoloKey = expKey(filename.replace(/\.[^.]+$/, ".txt"));
+    await putObject(yoloKey, text, "text/plain");
+    results.push({ file: filename, annotations: count });
+  }
   await putObject(expKey("classes.txt"), classes.join("\n"), "text/plain");
   return { format: "yolo", files: results.length, classes };
+}
+
+/** Read every annotation JSON from R2. */
+export async function loadAllAnnotated(): Promise<{ filename: string; data: ImageAnnotation }[]> {
+  const keys = await listKeys(PREFIX_RAW());
+  const imageKeys = keys.filter(isImageKey).filter((k) => !isTrashed(rawFilename(k))).sort();
+  const results: { filename: string; data: ImageAnnotation }[] = [];
+  const texts = await Promise.all(
+    imageKeys.map((k) => getObjectText(annKey(rawFilename(k)))),
+  );
+  for (let i = 0; i < imageKeys.length; i++) {
+    const data = safeJsonParse<ImageAnnotation>(texts[i]);
+    if (!data) continue;
+    results.push({ filename: rawFilename(imageKeys[i]), data });
+  }
+  return results;
 }
 
 /**

@@ -6,9 +6,8 @@ import {
   getObjectBuffer,
   PREFIX_ANN,
   PREFIX_RAW,
-  joinKey,
 } from "@/lib/r2";
-import { exportCOCO } from "@/lib/storage";
+import { exportCOCO, buildYoloLabels, loadAllAnnotated } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -213,14 +212,106 @@ export async function GET() {
     }
   }
 
-  // 4. COCO export (also writes to R2 as a side effect)
+  // Track which optional sections shipped so the README reflects reality
+  // and partial-failure footprints are visible to the recipient.
+  let cocoIncluded = false;
+  let yoloIncluded = false;
+
+  // 4. COCO export (also writes to R2 as a side effect).
   try {
     const coco = await exportCOCO();
     entries.push({
-      name: "coco_export.json",
+      name: "coco/coco_export.json",
       data: Buffer.from(JSON.stringify(coco, null, 2), "utf8"),
     });
-  } catch { /* non-fatal */ }
+    cocoIncluded = true;
+  } catch (err) {
+    console.error("[zip] COCO export failed", err);
+    entries.push({
+      name: "coco/ERROR.txt",
+      data: Buffer.from(
+        `COCO export failed at ${new Date().toISOString()}.\n` +
+          `Reason: ${err instanceof Error ? err.message : String(err)}\n`,
+        "utf8",
+      ),
+    });
+  }
+
+  // 5. YOLO bundle: per-image .txt labels + classes.txt + dataset.yaml.
+  // Image and label paths are kept parallel under images/ and yolo/labels/
+  // so the zip is drop-in usable by Ultralytics tooling.
+  // Built into a local array first; appended only if the entire bundle
+  // succeeded so we never ship a half-built yolo tree (some labels but no
+  // classes.txt / dataset.yaml).
+  try {
+    const annotated = await loadAllAnnotated();
+    const { files: yoloFiles, classes } = buildYoloLabels(annotated);
+    const yoloEntries: ZipEntry[] = [];
+    for (const [filename, { text }] of yoloFiles) {
+      const labelName = filename.replace(/\.[^.]+$/, ".txt");
+      yoloEntries.push({
+        name: `yolo/labels/${labelName}`,
+        data: Buffer.from(text, "utf8"),
+      });
+    }
+    yoloEntries.push({
+      name: "yolo/classes.txt",
+      data: Buffer.from(classes.join("\n"), "utf8"),
+    });
+    const yaml = [
+      "# Ultralytics-compatible dataset descriptor.",
+      "# Adjust `path` to the absolute root after extracting this zip.",
+      "# `train` and `val` point to the same set — split downstream as needed.",
+      "path: .",
+      "train: images",
+      "val: images",
+      `nc: ${classes.length}`,
+      `names: [${classes.map((c) => JSON.stringify(c)).join(", ")}]`,
+      "",
+    ].join("\n");
+    yoloEntries.push({ name: "yolo/dataset.yaml", data: Buffer.from(yaml, "utf8") });
+    entries.push(...yoloEntries);
+    yoloIncluded = true;
+  } catch (err) {
+    console.error("[zip] YOLO bundle failed", err);
+    entries.push({
+      name: "yolo/ERROR.txt",
+      data: Buffer.from(
+        `YOLO bundle failed at ${new Date().toISOString()}.\n` +
+          `Reason: ${err instanceof Error ? err.message : String(err)}\n`,
+        "utf8",
+      ),
+    });
+  }
+
+  // 6. README.md so the recipient knows the layout.
+  // Image extension is preserved when the source is already PNG; non-PNG
+  // sources are converted to PNG by the loop above (see step 3).
+  const readme = [
+    "# Annotation Export",
+    "",
+    `Generated: ${new Date().toISOString()}`,
+    "",
+    "## Layout",
+    "",
+    "- `manifest.json` — per-image status & annotation count",
+    "- `annotations/<folder>/<name>.json` — full per-image annotation source",
+    "- `images/<folder>/<name>.png` — every raw image (re-encoded to PNG when source was not PNG)",
+    cocoIncluded
+      ? "- `coco/coco_export.json` — COCO-format dataset"
+      : "- `coco/ERROR.txt` — COCO export failed; see file for details",
+    yoloIncluded
+      ? "- `yolo/labels/<folder>/<name>.txt` — YOLO label file per image"
+      : "- `yolo/ERROR.txt` — YOLO bundle failed; see file for details",
+    ...(yoloIncluded
+      ? [
+          "- `yolo/classes.txt` — class index → name (line N == class N)",
+          "- `yolo/dataset.yaml` — Ultralytics dataset descriptor (train and val refer to the same `images/` set)",
+        ]
+      : []),
+    "",
+  ].join("\n");
+  entries.push({ name: "README.md", data: Buffer.from(readme, "utf8") });
 
   if (entries.length === 0) {
     return NextResponse.json({ error: "No data found" }, { status: 404 });
