@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export function PropertiesPanel({
+function PropertiesPanelImpl({
   selectedAnnotation,
   annotations,
   labels,
@@ -51,8 +52,8 @@ export function PropertiesPanel({
   onDuplicate: () => void;
 }) {
   return (
-    <section className="border-b p-3">
-      <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Properties</h3>
+    <section className="panel-section">
+      <h3 className="panel-title mb-2">Properties</h3>
       {selectedAnnotation
         ? (() => {
             const ann = annotations.find((a) => a.id === selectedAnnotation);
@@ -202,3 +203,6 @@ export function PropertiesPanel({
     </section>
   );
 }
+
+export const PropertiesPanel = memo(PropertiesPanelImpl);
+

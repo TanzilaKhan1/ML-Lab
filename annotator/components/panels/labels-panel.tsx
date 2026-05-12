@@ -1,12 +1,13 @@
 "use client";
 
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ColorPicker } from "@/components/color-picker";
 import type { Annotation, LabelDef } from "@/lib/types";
 
-export function LabelsPanel({
+function LabelsPanelImpl({
   labels,
   annotations,
   activeLabel,
@@ -36,9 +37,9 @@ export function LabelsPanel({
   onAdd: () => void;
 }) {
   return (
-    <section className="border-b p-3">
+    <section className="panel-section">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Labels</h3>
+        <h3 className="panel-title">Labels</h3>
         <span className="text-[10px] text-muted-foreground">Press 1–9</span>
       </div>
       <div className="flex flex-wrap gap-1.5 mb-3">
@@ -53,7 +54,8 @@ export function LabelsPanel({
               onDoubleClick={() => onToggleFilter(l.name)}
               title={`Click to select, double-click to filter by "${l.name}"`}
               className={cn(
-                "group flex items-center gap-1 px-2 h-6 rounded-full text-[11px] font-semibold text-white transition-all",
+                "group flex items-center gap-1 px-2 h-7 sm:h-6 rounded-full text-[11px] font-semibold text-white transition-all touch-target shadow-sm",
+                "hover:brightness-110 active:scale-95",
                 isActive && "ring-2 ring-white shadow-md scale-105",
                 isFilter && !isActive && "ring-2 ring-white/60",
               )}
@@ -64,7 +66,7 @@ export function LabelsPanel({
               {count > 0 && <span className="text-[9px] px-1 rounded bg-black/40 font-mono tabular-nums">{count}</span>}
               <span
                 onClick={(e) => { e.stopPropagation(); onRequestRemove(l.name); }}
-                className="ml-0.5 size-3.5 rounded-full flex items-center justify-center text-[9px] bg-black/30 hover:bg-red-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                className="ml-0.5 size-3.5 rounded-full flex items-center justify-center text-[9px] bg-black/30 hover:bg-red-500 cursor-pointer opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
               >×</span>
             </button>
           );
@@ -89,3 +91,5 @@ export function LabelsPanel({
     </section>
   );
 }
+
+export const LabelsPanel = memo(LabelsPanelImpl);

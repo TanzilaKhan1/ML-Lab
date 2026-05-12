@@ -44,21 +44,21 @@ export function ShortcutsDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-1">
-          <h4 className="col-span-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mt-1">Tools</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
+          <h4 className="col-span-full panel-title mt-1">Tools</h4>
           {TOOLS.map(([k, d]) => <ShortcutRow key={k} k={k} d={d} />)}
 
-          <h4 className="col-span-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mt-3">Actions</h4>
+          <h4 className="col-span-full panel-title mt-3">Actions</h4>
           {ACTIONS.map(([k, d]) => <ShortcutRow key={k} k={k} d={d} />)}
 
-          <h4 className="col-span-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mt-3">Navigation</h4>
+          <h4 className="col-span-full panel-title mt-3">Navigation</h4>
           {NAV.map(([k, d]) => <ShortcutRow key={k} k={k} d={d} />)}
 
-          <h4 className="col-span-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mt-3">Review</h4>
+          <h4 className="col-span-full panel-title mt-3">Review</h4>
           {REVIEW.map(([k, d]) => <ShortcutRow key={k} k={k} d={d} />)}
         </div>
       </DialogContent>

@@ -36,47 +36,48 @@
 }
 
 .dark {
-  /* App chrome */
-  --background: oklch(0.145 0.02 270);
-  --foreground: oklch(0.94 0.005 270);
-  --card: oklch(0.19 0.02 270);
-  --card-foreground: oklch(0.94 0.005 270);
-  --popover: oklch(0.19 0.02 270);
-  --popover-foreground: oklch(0.94 0.005 270);
+  /* App chrome — refined indigo dark. Background slightly cooler so canvas
+     pops; card lifts ~4 L* above background for clean panel separation. */
+  --background: oklch(0.138 0.018 270);
+  --foreground: oklch(0.96 0.005 270);
+  --card: oklch(0.185 0.022 270);
+  --card-foreground: oklch(0.96 0.005 270);
+  --popover: oklch(0.19 0.022 270);
+  --popover-foreground: oklch(0.96 0.005 270);
 
-  /* Indigo primary so "Add / Accept / save-now" buttons read as the brand. */
-  --primary: oklch(0.62 0.19 275);
-  --primary-foreground: oklch(0.98 0.005 270);
+  /* Indigo primary so "Add / Accept / save-now" buttons read as brand. */
+  --primary: oklch(0.66 0.2 274);
+  --primary-foreground: oklch(0.99 0.005 270);
 
-  --secondary: oklch(0.24 0.02 270);
-  --secondary-foreground: oklch(0.94 0.005 270);
+  --secondary: oklch(0.235 0.02 270);
+  --secondary-foreground: oklch(0.96 0.005 270);
 
-  --muted: oklch(0.24 0.02 270);
-  --muted-foreground: oklch(0.66 0.01 270);
+  --muted: oklch(0.235 0.02 270);
+  --muted-foreground: oklch(0.68 0.012 270);
 
-  --accent: oklch(0.28 0.04 275);
-  --accent-foreground: oklch(0.98 0.005 270);
+  --accent: oklch(0.3 0.045 275);
+  --accent-foreground: oklch(0.99 0.005 270);
 
-  --destructive: oklch(0.65 0.22 25);
+  --destructive: oklch(0.66 0.23 25);
 
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.62 0.19 275);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.7 0.18 275);
 
-  --chart-1: oklch(0.62 0.19 275);
-  --chart-2: oklch(0.7 0.17 180);
-  --chart-3: oklch(0.75 0.18 100);
-  --chart-4: oklch(0.7 0.2 25);
+  --chart-1: oklch(0.66 0.2 274);
+  --chart-2: oklch(0.72 0.17 180);
+  --chart-3: oklch(0.78 0.17 100);
+  --chart-4: oklch(0.72 0.2 25);
   --chart-5: oklch(0.78 0.17 330);
 
-  --sidebar: oklch(0.17 0.02 270);
-  --sidebar-foreground: oklch(0.94 0.005 270);
-  --sidebar-primary: oklch(0.62 0.19 275);
-  --sidebar-primary-foreground: oklch(0.98 0.005 270);
-  --sidebar-accent: oklch(0.24 0.02 270);
-  --sidebar-accent-foreground: oklch(0.94 0.005 270);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.62 0.19 275);
+  --sidebar: oklch(0.165 0.022 270);
+  --sidebar-foreground: oklch(0.96 0.005 270);
+  --sidebar-primary: oklch(0.66 0.2 274);
+  --sidebar-primary-foreground: oklch(0.99 0.005 270);
+  --sidebar-accent: oklch(0.235 0.02 270);
+  --sidebar-accent-foreground: oklch(0.96 0.005 270);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.7 0.18 275);
 }
 
 @theme inline {
@@ -113,6 +114,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
   --font-heading: var(--font-sans);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -129,28 +131,106 @@
   }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    overscroll-behavior: none;
+  }
+  /* Tabular numerals everywhere counts matter. */
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  button, [role="button"] { -webkit-tap-highlight-color: transparent; }
+
+  /* Refined focus ring — indigo glow, not blue browser default. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  /* Components manage their own ring; suppress double ring on focusables. */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [role="textbox"]:focus-visible,
+  [role="combobox"]:focus-visible {
+    outline: none;
   }
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
+/* ---------- Scrollbars ---------- */
+::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 10%);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: oklch(1 0 0 / 22%); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+* { scrollbar-width: thin; scrollbar-color: oklch(1 0 0 / 14%) transparent; }
 
 /* Fabric injects a .canvas-container wrapper positioned relative by default. */
 .canvas-container { position: absolute !important; top: 0; left: 0; }
 
-/* Checkered transparency background for the canvas area. Dark-mode friendly. */
+/* Checkered transparency background for the canvas area. Dark-mode friendly,
+   with a faint radial vignette so the centered image reads as the focal point. */
 .canvas-bg {
-  background-color: oklch(0.14 0.02 270);
+  background-color: oklch(0.13 0.018 270);
   background-image:
-    linear-gradient(45deg, oklch(0.19 0.02 270) 25%, transparent 25%),
-    linear-gradient(-45deg, oklch(0.19 0.02 270) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, oklch(0.19 0.02 270) 75%),
-    linear-gradient(-45deg, transparent 75%, oklch(0.19 0.02 270) 75%);
-  background-size: 20px 20px;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    radial-gradient(ellipse at center, oklch(0.165 0.022 270) 0%, transparent 70%),
+    linear-gradient(45deg, oklch(0.175 0.022 270) 25%, transparent 25%),
+    linear-gradient(-45deg, oklch(0.175 0.022 270) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, oklch(0.175 0.022 270) 75%),
+    linear-gradient(-45deg, transparent 75%, oklch(0.175 0.022 270) 75%);
+  background-size: 100% 100%, 22px 22px, 22px 22px, 22px 22px, 22px 22px;
+  background-position: center, 0 0, 0 11px, 11px -11px, -11px 0;
+}
+
+/* ---------- Utilities for panel sections + skeletons ---------- */
+@layer utilities {
+  .panel-section { @apply border-b p-3; }
+  .panel-title {
+    @apply text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold;
+  }
+  /* Subtle shimmer for image/data loading. */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      oklch(1 0 0 / 4%) 0%,
+      oklch(1 0 0 / 10%) 50%,
+      oklch(1 0 0 / 4%) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  /* Touch-friendly minimum hit area for icon buttons on coarse pointers. */
+  @media (pointer: coarse) {
+    .touch-target { min-width: 44px; min-height: 44px; }
+  }
+  /* Safe-area padding for notched mobile devices. */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
