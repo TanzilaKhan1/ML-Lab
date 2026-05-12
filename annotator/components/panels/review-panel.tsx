@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ const statusBadgeVariant: Record<ImageStatus, "default" | "secondary" | "destruc
   rejected: "destructive",
 };
 
-export function ReviewPanel({
+function ReviewPanelImpl({
   currentImage,
   imageStatus,
   reviewComment,
@@ -30,8 +31,8 @@ export function ReviewPanel({
   onStatus: (status: ImageStatus) => void;
 }) {
   return (
-    <section className="p-3 space-y-2">
-      <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Review</h3>
+    <section className="panel-section space-y-2 pb-safe">
+      <h3 className="panel-title">Review</h3>
       {currentImage ? (
         <>
           <Badge
@@ -52,7 +53,7 @@ export function ReviewPanel({
           />
           <div className="flex gap-1.5">
             <Button
-              className="flex-1 bg-emerald-500 text-white hover:bg-emerald-400"
+              className="flex-1 bg-emerald-500 text-white hover:bg-emerald-400 active:scale-95"
               size="sm"
               onClick={() => onStatus("accepted")}
             >
@@ -60,7 +61,7 @@ export function ReviewPanel({
             </Button>
             <Button
               variant="destructive"
-              className="flex-1"
+              className="flex-1 active:scale-95"
               size="sm"
               onClick={() => onStatus("rejected")}
             >
@@ -72,10 +73,10 @@ export function ReviewPanel({
           </Button>
           {reviewHistory.length > 0 && (
             <div className="pt-2">
-              <h4 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 font-semibold">History</h4>
+              <h4 className="panel-title mb-1">History</h4>
               <div className="max-h-40 overflow-y-auto space-y-1">
                 {[...reviewHistory].reverse().map((h, i) => (
-                  <div key={i} className="p-1.5 rounded bg-muted text-[11px]">
+                  <div key={i} className="p-1.5 rounded bg-muted/60 text-[11px] border border-border/40">
                     <span className={cn(
                       "font-semibold capitalize",
                       h.action === "accepted" && "text-emerald-400",
@@ -83,7 +84,7 @@ export function ReviewPanel({
                       h.action === "annotated" && "text-primary",
                     )}>{h.action}</span>
                     {h.comment && <span className="text-muted-foreground"> — {h.comment}</span>}
-                    <div className="text-[9px] text-muted-foreground font-mono mt-0.5">
+                    <div className="text-[9px] text-muted-foreground font-mono mt-0.5 tabular-nums">
                       {new Date(h.timestamp).toLocaleString()}
                     </div>
                   </div>
@@ -98,3 +99,5 @@ export function ReviewPanel({
     </section>
   );
 }
+
+export const ReviewPanel = memo(ReviewPanelImpl);

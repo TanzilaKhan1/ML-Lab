@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, memo } from "react";
 import type {
   Annotation,
   ImageAnnotation,
@@ -36,9 +36,17 @@ import {
   Upload,
   MoreVertical,
   FolderInput,
+  PanelRight,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -146,9 +154,10 @@ const TOOLS: { id: Tool; label: string; shortcut: string; icon: React.ComponentT
  * Lazy thumbnail — fetches the full raw image from R2 only when scrolled into
  * view. Browser cache + Cache-Control make repeat navigations cheap.
  */
-function ImageThumb({ filename }: { filename: string }) {
+const ImageThumb = memo(function ImageThumb({ filename }: { filename: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -169,24 +178,32 @@ function ImageThumb({ filename }: { filename: string }) {
   return (
     <div
       ref={ref}
-      className="w-10 h-10 rounded-md bg-background border border-border shrink-0 overflow-hidden flex items-center justify-center"
+      className="w-10 h-10 rounded-md bg-background border border-border shrink-0 overflow-hidden flex items-center justify-center relative"
     >
       {visible ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={`/api/derived/thumb/${encodeFilePath(filename)}`}
-          alt=""
-          className="w-full h-full object-cover"
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-        />
+        <>
+          {!loaded && <span className="absolute inset-0 skeleton-shimmer" />}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/derived/thumb/${encodeFilePath(filename)}`}
+            alt=""
+            className={cn(
+              "w-full h-full object-cover transition-opacity duration-300",
+              loaded ? "opacity-100" : "opacity-0",
+            )}
+            loading="lazy"
+            decoding="async"
+            draggable={false}
+            onLoad={() => setLoaded(true)}
+            onError={() => setLoaded(true)}
+          />
+        </>
       ) : (
         <ImageIcon className="size-4 text-muted-foreground/50" />
       )}
     </div>
   );
-}
+});
 
 const statusDot: Record<ImageStatus, string> = {
   unannotated: "bg-muted-foreground",
@@ -220,6 +237,7 @@ export default function AnnotatorPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [exportResult, setExportResult] = useState<string | null>(null);
   const [saveIndicator, setSaveIndicator] = useState("Auto-save on");
   const [brightness, setBrightness] = useState(100);
@@ -439,7 +457,7 @@ export default function AnnotatorPage() {
           left: textLeft, top: textTop, angle,
           fontSize: 12, fill: "#fff", backgroundColor: ann.color + "DD",
           padding: 3, selectable: false, evented: false,
-          fontFamily: "Inter, sans-serif",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif",
         });
         (text as any).isLabel = true;
         (text as any).annotationId = ann.id;
@@ -465,7 +483,7 @@ export default function AnnotatorPage() {
           left: (ann.x || 0) + 2, top: (ann.y || 0) - 20,
           fontSize: 12, fill: "#fff", backgroundColor: ann.color + "DD",
           padding: 3, selectable: false, evented: false,
-          fontFamily: "Inter, sans-serif",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif",
         });
         (text as any).isLabel = true;
         (text as any).annotationId = ann.id;
@@ -496,7 +514,7 @@ export default function AnnotatorPage() {
           left: bounds.left + 2, top: bounds.top - 20,
           fontSize: 12, fill: "#fff", backgroundColor: ann.color + "DD",
           padding: 3, selectable: false, evented: false,
-          fontFamily: "Inter, sans-serif",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif",
         });
         (text as any).isLabel = true;
         (text as any).annotationId = ann.id;
@@ -525,7 +543,7 @@ export default function AnnotatorPage() {
           left: bounds.left + 2, top: bounds.top - 20,
           fontSize: 12, fill: "#fff", backgroundColor: ann.color + "DD",
           padding: 3, selectable: false, evented: false,
-          fontFamily: "Inter, sans-serif",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif",
         });
         (text as any).isLabel = true;
         (text as any).annotationId = ann.id;
@@ -558,7 +576,7 @@ export default function AnnotatorPage() {
           left: (ann.x || 0) + 14, top: (ann.y || 0) - 8,
           fontSize: 11, fill: "#fff", backgroundColor: ann.color + "DD",
           padding: 2, selectable: false, evented: false,
-          fontFamily: "Inter, sans-serif",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif",
         });
         (text as any).isLabel = true;
         (text as any).annotationId = ann.id;
@@ -1936,6 +1954,79 @@ export default function AnnotatorPage() {
     return q ? images.filter((i) => i.filename.toLowerCase().includes(q)) : images;
   })();
 
+  const inspectorPanels = (
+    <>
+      <LabelsPanel
+        labels={labels}
+        annotations={annotations}
+        activeLabel={activeLabel}
+        labelFilter={labelFilter}
+        newLabelName={newLabelName}
+        newLabelColor={newLabelColor}
+        swatches={LABEL_COLORS}
+        onSelectLabel={(name) => { setActiveLabel(name); activeLabelRef.current = name; }}
+        onToggleFilter={(name) => setLabelFilter(labelFilter === name ? null : name)}
+        onRequestRemove={requestRemoveLabel}
+        onNameChange={setNewLabelName}
+        onColorChange={setNewLabelColor}
+        onAdd={addLabel}
+      />
+      {currentImage && (
+        <AdjustmentsPanel
+          brightness={brightness} setBrightness={setBrightness}
+          contrast={contrast} setContrast={setContrast}
+          opacity={opacity} setOpacity={setOpacity}
+          onReset={() => {
+            setBrightness(100); setContrast(100);
+            setOpacity(0); opacityRef.current = 0;
+          }}
+        />
+      )}
+      <PropertiesPanel
+        selectedAnnotation={selectedAnnotation}
+        annotations={annotations}
+        labels={labels}
+        attrDraftKey={attrDraftKey}
+        attrDraftVal={attrDraftVal}
+        onAttrDraftKey={setAttrDraftKey}
+        onAttrDraftVal={setAttrDraftVal}
+        onChangeLabel={(id, newLabel) => {
+          pushUndo();
+          const newAnns = annotations.map((a) =>
+            a.id === id ? { ...a, label: newLabel, color: getLabelColor(newLabel) } : a,
+          );
+          setAnnotations(newAnns); annotationsRef.current = newAnns;
+          renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
+        }}
+        onSetAttribute={setAnnotationAttribute}
+        onRotate={setAnnotationAngle}
+        onCopy={copySelected}
+        onDuplicate={duplicateSelected}
+      />
+      <AnnotationsList
+        annotations={annotations}
+        labelFilter={labelFilter}
+        selectedAnnotation={selectedAnnotation}
+        onSelect={setSelectedAnnotation}
+        onToggleFlag={toggleAnnotationFlag}
+        onDelete={deleteAnnotation}
+        onClearFilter={() => setLabelFilter(null)}
+      />
+      <ReviewPanel
+        currentImage={currentImage}
+        imageStatus={imageStatus}
+        reviewComment={reviewComment}
+        reviewHistory={reviewHistory}
+        onCommentChange={(v) => {
+          setReviewComment(v);
+          reviewCommentRef.current = v;
+          scheduleAutoSave(annotationsRef.current);
+        }}
+        onStatus={setStatus}
+      />
+    </>
+  );
+
   return (
     <SidebarProvider className="h-screen bg-background text-foreground">
       {/* Left: image list (collapsible — Cmd/Ctrl+B to toggle) */}
@@ -2091,44 +2182,65 @@ export default function AnnotatorPage() {
 
       <SidebarInset className="min-w-0">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-4 h-12 bg-sidebar border-b shrink-0 z-10">
-          <div className="flex items-center gap-3">
+        <header className="flex items-center justify-between gap-2 px-2 sm:px-4 h-12 bg-sidebar/95 supports-backdrop-filter:backdrop-blur-md border-b shrink-0 z-10 pt-safe">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <SidebarTrigger />
-            <h1 className="text-sm font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-fuchsia-400 bg-clip-text text-transparent">
-              Image Annotator
+            <h1 className="font-display text-base font-bold tracking-tight bg-gradient-to-r from-indigo-300 via-violet-300 to-fuchsia-300 bg-clip-text text-transparent shrink-0">
+              Annotator
             </h1>
-          <Separator orientation="vertical" className="h-5" />
-          <div className="flex gap-1.5">
-            <Badge variant="outline">{stats.total} total</Badge>
-            <Badge variant="secondary">{stats.unannotated} todo</Badge>
-            <Badge variant="default">{stats.annotated} done</Badge>
-            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">{stats.accepted} accepted</Badge>
-            <Badge variant="destructive">{stats.rejected} rejected</Badge>
+            <Separator orientation="vertical" className="h-5 hidden md:block" />
+            <div className="hidden md:flex gap-1.5 overflow-hidden">
+              <Badge variant="outline" className="tabular-nums">{stats.total} total</Badge>
+              <Badge variant="secondary" className="tabular-nums">{stats.unannotated} todo</Badge>
+              <Badge variant="default" className="tabular-nums hidden lg:inline-flex">{stats.annotated} done</Badge>
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 tabular-nums hidden lg:inline-flex">{stats.accepted} accepted</Badge>
+              <Badge variant="destructive" className="tabular-nums hidden lg:inline-flex">{stats.rejected} rejected</Badge>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowSettingsModal(true)}>
-            <Settings /> Settings
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setShowExportModal(true)}>
-            <FileDown /> Export
-          </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => setShowShortcutsModal(true)}>
-                <Keyboard />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Keyboard shortcuts</TooltipContent>
-          </Tooltip>
-        </div>
-      </header>
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={() => setShowSettingsModal(true)} className="hidden sm:inline-flex">
+              <Settings /> <span className="hidden md:inline">Settings</span>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowExportModal(true)}>
+              <FileDown /> <span className="hidden md:inline">Export</span>
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon-sm" onClick={() => setShowShortcutsModal(true)} className="hidden sm:inline-flex">
+                  <Keyboard />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Keyboard shortcuts</TooltipContent>
+            </Tooltip>
+            {/* Mobile inspector trigger — opens right-side sheet < lg */}
+            <Sheet open={mobileInspectorOpen} onOpenChange={setMobileInspectorOpen}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label="Open inspector">
+                      <PanelRight />
+                    </Button>
+                  </SheetTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Inspector</TooltipContent>
+              </Tooltip>
+              <SheetContent side="right" className="w-[88vw] sm:max-w-sm p-0 bg-sidebar border-l">
+                <SheetHeader className="border-b p-3">
+                  <SheetTitle>Inspector</SheetTitle>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto">
+                  {inspectorPanels}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </header>
 
         <div className="flex flex-1 min-h-0">
           {/* Center: toolbar + canvas */}
           <section className="flex-1 flex flex-col min-w-0">
-          <div className="flex items-center gap-1 px-2 py-1.5 bg-sidebar border-b">
-            <div className="flex gap-0.5 pr-2 border-r">
+          <div className="flex items-center gap-1 px-2 py-1.5 bg-sidebar border-b overflow-x-auto scrollbar-hide [&::-webkit-scrollbar]:hidden">
+            <div className="flex gap-0.5 pr-2 border-r shrink-0">
               {TOOLS.map((t) => {
                 const Icon = t.icon;
                 return (
@@ -2148,7 +2260,7 @@ export default function AnnotatorPage() {
               })}
             </div>
 
-            <div className="flex items-center gap-0.5 px-2 border-r">
+            <div className="flex items-center gap-0.5 px-2 border-r shrink-0">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon-sm" onClick={zoomOut}><ZoomOut /></Button>
@@ -2170,7 +2282,7 @@ export default function AnnotatorPage() {
               </Tooltip>
             </div>
 
-            <div className="flex gap-0.5 px-2 border-r">
+            <div className="flex gap-0.5 px-2 border-r shrink-0">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon-sm" onClick={undo}><Undo2 /></Button>
@@ -2204,9 +2316,9 @@ export default function AnnotatorPage() {
               <TooltipContent>{annotationsVisible ? "Hide annotations" : "Show annotations"} (H)</TooltipContent>
             </Tooltip>
 
-            <div className="flex items-center gap-1 ml-auto">
+            <div className="flex items-center gap-1 ml-auto shrink-0">
               {currentImage && (
-                <span className="text-[11px] text-muted-foreground mr-2 tabular-nums">{currentIdx + 1} / {images.length}</span>
+                <span className="text-[11px] text-muted-foreground mr-2 tabular-nums hidden sm:inline">{currentIdx + 1} / {images.length}</span>
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2232,12 +2344,13 @@ export default function AnnotatorPage() {
           >
             <canvas ref={canvasRef} />
             {!currentImage && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground gap-4">
-                <div className="size-16 rounded-2xl bg-card flex items-center justify-center border">
-                  <Upload className="size-7 text-primary" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground gap-4 px-6">
+                <div className="relative size-16 rounded-2xl bg-card flex items-center justify-center border shadow-lg shadow-primary/5">
+                  <span className="absolute inset-0 rounded-2xl bg-primary/10 blur-xl" aria-hidden />
+                  <Upload className="size-7 text-primary relative" />
                 </div>
-                <div className="space-y-1 text-center">
-                  <h2 className="text-lg text-foreground font-semibold">No image loaded</h2>
+                <div className="space-y-1 text-center max-w-md">
+                  <h2 className="font-display text-xl text-foreground font-semibold tracking-tight">No image loaded</h2>
                   <p className="text-sm">
                     {images.length === 0
                       ? <>Drop images anywhere on this area, or click below.</>
@@ -2257,7 +2370,7 @@ export default function AnnotatorPage() {
                       ev.target.value = "";
                     }}
                   />
-                  <span className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/80 transition">
+                  <span className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/85 active:translate-y-px transition shadow-md shadow-primary/20">
                     <Upload className="size-4" />
                     Upload to {uploadFolder}
                   </span>
@@ -2268,14 +2381,17 @@ export default function AnnotatorPage() {
               </div>
             )}
             {isLoading && currentImage && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 rounded-full bg-card/90 border backdrop-blur text-xs text-muted-foreground flex items-center gap-2 shadow-md">
-                <span className="size-2 rounded-full bg-primary animate-pulse" />
-                Loading {currentImage}…
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 rounded-full bg-card/90 border supports-backdrop-filter:backdrop-blur-md text-xs text-foreground flex items-center gap-2 shadow-lg shadow-black/20">
+                <span className="relative flex size-2">
+                  <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-75" />
+                  <span className="relative rounded-full size-2 bg-primary" />
+                </span>
+                <span className="truncate max-w-[60vw]">Loading {currentImage}…</span>
               </div>
             )}
             {isDragOver && (
-              <div className="absolute inset-0 bg-primary/10 flex items-center justify-center z-50 pointer-events-none">
-                <div className="px-6 py-4 bg-card rounded-xl border-2 border-dashed border-primary text-primary font-semibold flex items-center gap-2">
+              <div className="absolute inset-0 bg-primary/10 supports-backdrop-filter:backdrop-blur-sm flex items-center justify-center z-50 pointer-events-none animate-in fade-in duration-150">
+                <div className="px-6 py-4 bg-card rounded-2xl border-2 border-dashed border-primary text-primary font-semibold flex items-center gap-2 shadow-xl shadow-primary/20">
                   <Upload className="size-5" />
                   Drop to upload
                 </div>
@@ -2283,93 +2399,22 @@ export default function AnnotatorPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-4 px-3 py-1 bg-sidebar border-t text-[11px] text-muted-foreground font-mono tabular-nums">
-            <span>x: {cursorPos.x}, y: {cursorPos.y}</span>
-            <span>{zoomLevel}%</span>
+          <div className="flex items-center gap-2 sm:gap-4 px-3 py-1 bg-sidebar border-t text-[11px] text-muted-foreground font-mono tabular-nums pb-safe overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0">x: {cursorPos.x}, y: {cursorPos.y}</span>
+            <span className="shrink-0">{zoomLevel}%</span>
             {currentImage && <>
-              <span className="truncate max-w-40 font-sans">{currentImage}</span>
-              <span>{imageDimState.width}×{imageDimState.height}</span>
-              <span>{annotations.length} annotations</span>
+              <span className="truncate max-w-40 font-sans hidden md:inline">{currentImage}</span>
+              <span className="shrink-0 hidden sm:inline">{imageDimState.width}×{imageDimState.height}</span>
+              <span className="shrink-0">{annotations.length} ann.</span>
             </>}
-            <span className={cn("ml-auto", saveIndicator === "Saved" && "text-emerald-400", saveIndicator === "Save failed" && "text-red-400")}>{saveIndicator}</span>
+            <span className={cn("ml-auto shrink-0", saveIndicator === "Saved" && "text-emerald-400", saveIndicator === "Save failed" && "text-red-400")}>{saveIndicator}</span>
           </div>
         </section>
 
-        {/* Right: labels / properties / annotations / review */}
-        <aside className="w-80 min-w-80 bg-sidebar border-l flex flex-col overflow-hidden">
+        {/* Right: labels / properties / annotations / review — hidden < lg (use Sheet) */}
+        <aside className="hidden lg:flex w-80 shrink-0 bg-sidebar border-l flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
-            <LabelsPanel
-              labels={labels}
-              annotations={annotations}
-              activeLabel={activeLabel}
-              labelFilter={labelFilter}
-              newLabelName={newLabelName}
-              newLabelColor={newLabelColor}
-              swatches={LABEL_COLORS}
-              onSelectLabel={(name) => { setActiveLabel(name); activeLabelRef.current = name; }}
-              onToggleFilter={(name) => setLabelFilter(labelFilter === name ? null : name)}
-              onRequestRemove={requestRemoveLabel}
-              onNameChange={setNewLabelName}
-              onColorChange={setNewLabelColor}
-              onAdd={addLabel}
-            />
-
-            {currentImage && (
-              <AdjustmentsPanel
-                brightness={brightness} setBrightness={setBrightness}
-                contrast={contrast} setContrast={setContrast}
-                opacity={opacity} setOpacity={setOpacity}
-                onReset={() => {
-                  setBrightness(100); setContrast(100);
-                  setOpacity(0); opacityRef.current = 0;
-                }}
-              />
-            )}
-
-            <PropertiesPanel
-              selectedAnnotation={selectedAnnotation}
-              annotations={annotations}
-              labels={labels}
-              attrDraftKey={attrDraftKey}
-              attrDraftVal={attrDraftVal}
-              onAttrDraftKey={setAttrDraftKey}
-              onAttrDraftVal={setAttrDraftVal}
-              onChangeLabel={(id, newLabel) => {
-                pushUndo();
-                const newAnns = annotations.map((a) =>
-                  a.id === id ? { ...a, label: newLabel, color: getLabelColor(newLabel) } : a,
-                );
-                setAnnotations(newAnns); annotationsRef.current = newAnns;
-                renderAnnotations(newAnns); scheduleAutoSave(newAnns, true);
-              }}
-              onSetAttribute={setAnnotationAttribute}
-              onRotate={setAnnotationAngle}
-              onCopy={copySelected}
-              onDuplicate={duplicateSelected}
-            />
-
-            <AnnotationsList
-              annotations={annotations}
-              labelFilter={labelFilter}
-              selectedAnnotation={selectedAnnotation}
-              onSelect={setSelectedAnnotation}
-              onToggleFlag={toggleAnnotationFlag}
-              onDelete={deleteAnnotation}
-              onClearFilter={() => setLabelFilter(null)}
-            />
-
-            <ReviewPanel
-              currentImage={currentImage}
-              imageStatus={imageStatus}
-              reviewComment={reviewComment}
-              reviewHistory={reviewHistory}
-              onCommentChange={(v) => {
-                setReviewComment(v);
-                reviewCommentRef.current = v;
-                scheduleAutoSave(annotationsRef.current);
-              }}
-              onStatus={setStatus}
-            />
+            {inspectorPanels}
           </div>
         </aside>
         </div>

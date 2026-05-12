@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 
@@ -22,7 +23,7 @@ function AdjustmentRow({
   );
 }
 
-export function AdjustmentsPanel({
+function AdjustmentsPanelImpl({
   brightness, setBrightness,
   contrast, setContrast,
   opacity, setOpacity,
@@ -33,17 +34,25 @@ export function AdjustmentsPanel({
   opacity: number; setOpacity: (n: number) => void;
   onReset: () => void;
 }) {
+  const isDirty = brightness !== 100 || contrast !== 100 || opacity !== 0;
   return (
-    <section className="border-b p-3 space-y-3">
-      <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Adjustments</h3>
+    <section className="panel-section space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="panel-title">Adjustments</h3>
+        {isDirty && (
+          <span className="text-[10px] text-primary font-medium">modified</span>
+        )}
+      </div>
       <div className="space-y-2">
         <AdjustmentRow label="Brightness" value={brightness} onChange={setBrightness} min={20} max={200} />
         <AdjustmentRow label="Contrast" value={contrast} onChange={setContrast} min={20} max={200} />
         <AdjustmentRow label="Fill" value={opacity} onChange={setOpacity} min={0} max={100} />
       </div>
-      <Button variant="ghost" size="xs" onClick={onReset}>
+      <Button variant="ghost" size="xs" onClick={onReset} disabled={!isDirty}>
         Reset adjustments
       </Button>
     </section>
   );
 }
+
+export const AdjustmentsPanel = memo(AdjustmentsPanelImpl);
