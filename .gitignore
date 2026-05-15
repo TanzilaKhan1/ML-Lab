@@ -1,1 +1,8 @@
 node_modules/
+
+predictor/__pycache__
+
+predictor/images
+predictor/predictor_app/__pycache__
+
+images
