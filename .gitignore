@@ -4,5 +4,6 @@ predictor/__pycache__
 
 predictor/images
 predictor/predictor_app/__pycache__
+predictor/predictor_app/ui/__pycache__
 
 images

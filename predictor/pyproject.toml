@@ -1,7 +1,7 @@
 [project]
 name = "predictor"
 version = "0.1.0"
-description = "Streamlit + Gradio UI for predicting bus/legua door-hanging safety from an uploaded image."
+description = "Streamlit UI for predicting bus/leguna door-hanging safety from an uploaded image."
 authors = [
     {name = "CREVIOS"}
 ]

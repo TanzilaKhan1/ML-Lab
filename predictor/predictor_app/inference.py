@@ -9,6 +9,7 @@ from typing import Optional
 import joblib
 import numpy as np
 
+from .config import MODEL_DIR
 from .preprocess import ImageInput, preprocess_for_model
 
 # Label semantics (matches scan_dataset's alphabetical ordering and the saved
@@ -21,9 +22,6 @@ LABEL_MEANING = {
     1: "UNSAFE — passengers are hanging on the door",
 }
 UNSAFE_LABEL = 1
-
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-MODEL_DIR = REPO_ROOT / "model"
 
 AVAILABLE_MODELS: dict[str, str] = {
     "Logistic Regression": "logistic_model.joblib",
