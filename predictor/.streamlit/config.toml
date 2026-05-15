@@ -1,0 +1,16 @@
+[theme]
+base = "light"
+primaryColor = "#6366f1"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f8fafc"
+textColor = "#0f172a"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showSidebarNavigation = false
+# "developer" keeps the Deploy button + rerun/stop controls visible locally.
+# (On Streamlit Community Cloud the Deploy button auto-hides regardless.)
+toolbarMode = "developer"
