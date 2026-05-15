@@ -7,7 +7,22 @@ from pathlib import Path
 PACKAGE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_ROOT.parent
 REPO_ROOT = PROJECT_ROOT.parent
-MODEL_DIR = REPO_ROOT / "model"
+
+# Model-weights lookup. We prefer an in-app `predictor/model/` directory so
+# Streamlit Cloud deployments are self-contained (no need to also clone the
+# repo-root training tree). If that folder doesn't exist or is empty we fall
+# back to the repo-root `model/` directory used during local development.
+_LOCAL_MODEL_DIR = PROJECT_ROOT / "model"
+_REPO_MODEL_DIR = REPO_ROOT / "model"
+
+
+def _resolve_model_dir() -> Path:
+    if _LOCAL_MODEL_DIR.is_dir() and any(_LOCAL_MODEL_DIR.glob("*.joblib")):
+        return _LOCAL_MODEL_DIR
+    return _REPO_MODEL_DIR
+
+
+MODEL_DIR = _resolve_model_dir()
 SAMPLE_IMAGES_DIR = PROJECT_ROOT / "images"
 
 SUPPORTED_UPLOAD_EXTENSIONS = ("png", "jpg", "jpeg", "webp", "bmp", "tiff", "heic", "heif")

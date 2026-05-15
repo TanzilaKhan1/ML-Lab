@@ -10,7 +10,6 @@ import hashlib
 from io import BytesIO
 
 import streamlit as st
-import torch
 
 from predictor_app import (
     UNSAFE_LABEL,
@@ -25,7 +24,6 @@ from predictor_app.ui import (
     SidebarSettings,
     apply_theme,
     page_config,
-    render_environment_info,
     render_explanation,
     render_header,
     render_prediction_card,
@@ -82,10 +80,6 @@ def main() -> None:
         return
 
     settings: SidebarSettings = render_sidebar(models)
-    render_environment_info(
-        pytorch_version=torch.__version__,
-        cuda_available=torch.cuda.is_available(),
-    )
 
     uploaded = st.file_uploader(
         "Drop or browse an image",

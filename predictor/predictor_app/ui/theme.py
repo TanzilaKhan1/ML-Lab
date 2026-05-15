@@ -34,12 +34,23 @@ _CSS = f"""
     border: 1px solid {PALETTE.border};
   }}
 
-  /* ----- hide Streamlit chrome ----- */
+  /* ----- hide Streamlit chrome -----
+     We intentionally do NOT hide [data-testid="stToolbar"] here: that
+     container holds the Deploy button (kept visible for local development)
+     and, in some Streamlit builds, the sidebar collapse/expand toggle that
+     lets users reopen the sidebar after collapsing it. */
   #MainMenu {{ visibility: hidden; }}
   footer {{ visibility: hidden; }}
   header [data-testid="stHeader"] {{ background: transparent; }}
-  [data-testid="stToolbar"] {{ display: none; }}
   [data-testid="stDecoration"] {{ display: none; }}
+
+  /* Make absolutely sure the chevron used to reopen a collapsed sidebar is
+     visible regardless of any container-level rules above. */
+  [data-testid="stSidebarCollapsedControl"] {{
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }}
 
   /* ----- page width ----- */
   .block-container {{

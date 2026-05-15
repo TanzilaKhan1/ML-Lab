@@ -3,7 +3,6 @@
 from .theme import apply_theme, page_config
 from .components import (
     SidebarSettings,
-    render_environment_info,
     render_explanation,
     render_header,
     render_prediction_card,
@@ -15,7 +14,6 @@ __all__ = [
     "apply_theme",
     "page_config",
     "SidebarSettings",
-    "render_environment_info",
     "render_explanation",
     "render_header",
     "render_prediction_card",

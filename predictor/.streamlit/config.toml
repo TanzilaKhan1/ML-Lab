@@ -11,4 +11,6 @@ gatherUsageStats = false
 
 [client]
 showSidebarNavigation = false
-toolbarMode = "minimal"
+# "developer" keeps the Deploy button + rerun/stop controls visible locally.
+# (On Streamlit Community Cloud the Deploy button auto-hides regardless.)
+toolbarMode = "developer"

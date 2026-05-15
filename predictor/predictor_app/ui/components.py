@@ -65,17 +65,6 @@ def render_sidebar(model_choices: dict[str, "object"]) -> SidebarSettings:
     )
 
 
-def render_environment_info(*, pytorch_version: str, cuda_available: bool) -> None:
-    with st.sidebar:
-        st.markdown("---")
-        st.markdown(
-            f'<div style="font-size:0.78rem;color:#64748b;">'
-            f'pytorch {pytorch_version} · cuda {"on" if cuda_available else "off"}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-
 # ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
@@ -192,9 +181,9 @@ def render_explanation(exp: LimeExplanation) -> None:
         with st.container(border=True):
             st.image(exp.overlay, width="stretch")
             st.caption(
-                "Yellow boundaries mark the most influential superpixels. "
-                "Coloured mask shows support (positive) and opposition (negative) "
-                "for the predicted class."
+                f"Red wash: top {exp.n_positive_regions} regions supporting the prediction · "
+                f"Green wash: top {exp.n_negative_regions} regions opposing it · "
+                "White outlines mark the boundaries of each superpixel."
             )
 
     with tab_heatmap:
