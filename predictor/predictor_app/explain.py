@@ -27,7 +27,7 @@ from skimage.color import rgb2gray
 from skimage.feature import hog
 from skimage.segmentation import mark_boundaries, slic
 
-from .inference import CLASS_NAMES, UNSAFE_LABEL, load_model
+from .inference import CLASS_NAMES, UNSAFE_LABEL, is_torch_model, load_model
 from .preprocess import HOG_PARAMS, HOG_SIZE, ImageInput, standardize_image
 
 
@@ -59,6 +59,13 @@ def _batch_hog_features(images_uint8: np.ndarray) -> np.ndarray:
 
 
 def _make_predict_fn(model):
+    # Torch wrappers consume the raw (N, H, W, 3) uint8 batch directly — they
+    # do their own resize/normalize, no HOG features involved.
+    if is_torch_model(model):
+        def predict_fn(batch: np.ndarray) -> np.ndarray:
+            return model.predict_proba(batch)
+        return predict_fn
+
     def predict_fn(batch: np.ndarray) -> np.ndarray:
         feats = _batch_hog_features(batch)
         if hasattr(model, "predict_proba"):
