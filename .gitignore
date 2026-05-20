@@ -7,3 +7,5 @@ predictor/predictor_app/__pycache__
 predictor/predictor_app/ui/__pycache__
 
 images
+
+predictor/model/__pycache__
