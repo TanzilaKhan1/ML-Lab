@@ -9,3 +9,29 @@ predictor/predictor_app/ui/__pycache__
 images
 
 predictor/model/__pycache__
+# --- added: exclude envs, caches, derived data, training artifacts ---
+.venv/
+.torch_cache/
+**/__pycache__/
+*.pyc
+*.orig
+*.npz
+
+# derived datasets (regenerable; raw data lives in R2, not git)
+model/Merged/
+model/Preprocessed/
+model/Crops/
+
+# training artifacts / output dirs (large; regenerable)
+model/outputs/
+model/outputs_*/
+predictor/model/outputs/
+model/model_backup_pretrained/
+
+# large duplicate model copies at model/ root — deployable copies live in predictor/model/
+model/resnet50.joblib
+model/convnext_tiny.joblib
+model/efficientnet_b0.joblib
+
+# local-path artifact
+model/crops_index.json

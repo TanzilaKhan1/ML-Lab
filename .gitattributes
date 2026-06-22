@@ -1,0 +1,2 @@
+predictor/model/convnext_tiny.joblib filter=lfs diff=lfs merge=lfs -text
+predictor/model/resnet50.joblib filter=lfs diff=lfs merge=lfs -text
