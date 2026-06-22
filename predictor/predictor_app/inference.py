@@ -30,12 +30,19 @@ UNSAFE_LABEL = 1
 #   "cnn" / "resnet" → torch state_dict; loaded via torch_models wrapper,
 #     which preprocesses raw PIL images itself (no HOG).
 AVAILABLE_MODELS: dict[str, tuple[str, str]] = {
-    "Logistic Regression": ("logistic_model.joblib", "sklearn"),
-    "SVM (RBF)": ("svm_model.joblib", "sklearn"),
-    "Naive Bayes": ("naive_bayes_model.joblib", "sklearn"),
+    "Ensemble (best)": ("ensemble.json", "ensemble"),
+    "ResNet50": ("resnet50.joblib", "torch"),
+    "ConvNeXt-Tiny": ("convnext_tiny.joblib", "torch"),
+    "EfficientNet-B0": ("efficientnet_b0.joblib", "torch"),
     "CNN": ("cnn_model.joblib", "cnn"),
-    "ResNet": ("resnet_model.joblib", "resnet"),
+    "ResNet18": ("resnet_model.joblib", "resnet"),
+    "SVM (RBF)": ("svm_model.joblib", "sklearn"),
+    "Logistic Regression": ("logistic_model.joblib", "sklearn"),
+    "Naive Bayes": ("naive_bayes_model.joblib", "sklearn"),
 }
+
+# torch-style kinds whose label decision uses a tuned P(unsafe) threshold
+_TORCH_KINDS = ("cnn", "resnet", "torch", "ensemble")
 
 
 @dataclass
@@ -74,18 +81,22 @@ def load_model(model_name: str):
 
     if kind == "sklearn":
         return joblib.load(path)
-    if kind in ("cnn", "resnet"):
+    if kind in ("cnn", "resnet", "torch"):
         # Lazy import so the app still loads sklearn-only when torch isn't installed.
         from .torch_models import load_torch_checkpoint
         return load_torch_checkpoint(path, kind=kind)
+    if kind == "ensemble":
+        from .torch_models import load_ensemble
+        return load_ensemble(path)
     raise ValueError(f"Unknown model kind for {model_name!r}: {kind!r}")
 
 
 def is_torch_model(model) -> bool:
-    """True if ``model`` came from the torch-checkpoint path."""
+    """True if ``model`` consumes raw images (torch single OR ensemble) rather
+    than HOG features. LIME uses this to decide what to feed the model."""
     # Avoid importing torch_models eagerly at module load.
-    from .torch_models import TorchClassifier
-    return isinstance(model, TorchClassifier)
+    from .torch_models import TorchClassifier, EnsembleClassifier
+    return isinstance(model, (TorchClassifier, EnsembleClassifier))
 
 
 def _image_to_pil(image: ImageInput) -> Image.Image:
@@ -100,11 +111,13 @@ def _image_to_pil(image: ImageInput) -> Image.Image:
 def predict(image: ImageInput, model_name: str = "Logistic Regression") -> Prediction:
     """Run the full pipeline: preprocess → load model → predict label + probs."""
     model = load_model(model_name)
+    _, kind = AVAILABLE_MODELS[model_name]
 
-    if is_torch_model(model):
+    if kind in _TORCH_KINDS:
         pil = _image_to_pil(image)
         probs_arr = model.predict_proba(pil)[0]
-        pred = int(probs_arr.argmax())
+        # label uses the model's tuned P(unsafe) threshold, not a plain argmax
+        pred = int(model.predict(pil)[0])
         probs = {CLASS_NAMES[i]: float(probs_arr[i]) for i in range(len(CLASS_NAMES))}
     else:
         features = preprocess_for_model(image)

@@ -1,0 +1,13 @@
+# Streamlit deployment requirements (Streamlit Community Cloud reads this file).
+# For GPU-less hosts, torch/torchvision install CPU wheels from PyPI automatically.
+streamlit>=1.39.0,<2.0.0
+scikit-learn>=1.5.0,<2.0.0
+scikit-image>=0.24.0,<1.0.0
+joblib>=1.4.0,<2.0.0
+pillow>=10.4.0,<12.0.0
+pillow-heif>=0.18.0,<1.0.0
+numpy>=1.26.0,<3.0.0
+lime>=0.2.0.1,<1.0.0
+matplotlib>=3.8.0,<4.0.0
+torch>=2.2.0
+torchvision>=0.17.0
