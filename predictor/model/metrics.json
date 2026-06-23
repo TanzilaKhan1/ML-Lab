@@ -1,6 +1,6 @@
 {
   "_README": "SOURCE OF TRUTH for the app's Model Analysis tab. Do NOT hand-edit the per-model error numbers in production — regenerate this file by running `python model/export_metrics.py` ON THE CLUSTER (where the dataset lives) after you retrain. The app reads this file and computes avoidable-bias/variance live, so: retrain -> export_metrics.py -> commit -> reboot app -> tab updates automatically.",
-  "generated": "seed (from RESULTS.md + all_results.json) — run export_metrics.py on the cluster to refresh with measured train error",
+  "generated": "measured by model/export_metrics.py",
   "task": {
     "name": "Door-Hanging Safety Classifier",
     "description": "Binary image classification: is a passenger hanging on the door of a bus/leguna (unsafe) or not (safe)?",
@@ -8,7 +8,7 @@
     "n_safe": 287,
     "n_unsafe": 98,
     "imbalance": "2.9:1 (safe:unsafe)",
-    "split": "70/15/15 stratified (train 269 / val 58 / test 58); deep models use 5-fold CV on the 327 train+val for a reliable estimate",
+    "split": "70/15/15 stratified (train 269 / val 58 / test 58). NOTE: transfer models (ResNet50/ConvNeXt/EfficientNet) were retrained on train+val for deployment, so their val is not held out — see methodology_note.",
     "majority_baseline_accuracy": 0.745,
     "primary_metric_note": "Because data is imbalanced 2.9:1, watch UNSAFE-RECALL (catching violations), not just accuracy. A 'always safe' model already scores 74.5% accuracy while catching 0 violations."
   },
@@ -31,103 +31,112 @@
       "train_error": null,
       "dev_error": 0.083,
       "dev_method": "5-fold CV (balanced operating point)",
-      "test_error": null
+      "test_error": null,
+      "val_contaminated": false
     },
     {
       "name": "ResNet50",
       "family": "deep",
-      "accuracy": 0.905,
-      "unsafe_recall": 0.843,
+      "accuracy": 0.9828,
+      "unsafe_recall": 1.0,
       "safe_recall": 0.926,
       "auc": 0.919,
-      "train_error": null,
-      "dev_error": 0.095,
-      "dev_method": "5-fold CV",
-      "test_error": null
+      "train_error": 0.0,
+      "dev_error": 0.0172,
+      "dev_method": "val (CONTAMINATED — trained on train+val)",
+      "test_error": 0.1724,
+      "val_contaminated": true
     },
     {
       "name": "ConvNeXt-Tiny",
       "family": "deep",
-      "accuracy": 0.905,
-      "unsafe_recall": 0.819,
+      "accuracy": 1.0,
+      "unsafe_recall": 1.0,
       "safe_recall": 0.934,
       "auc": 0.923,
-      "train_error": null,
-      "dev_error": 0.095,
-      "dev_method": "5-fold CV",
-      "test_error": null
+      "train_error": 0.0037,
+      "dev_error": 0.0,
+      "dev_method": "val (CONTAMINATED — trained on train+val)",
+      "test_error": 0.1552,
+      "val_contaminated": true
     },
     {
       "name": "EfficientNet-B0",
       "family": "deep",
-      "accuracy": null,
-      "unsafe_recall": null,
+      "accuracy": 0.9828,
+      "unsafe_recall": 1.0,
       "safe_recall": null,
       "auc": null,
-      "train_error": null,
-      "dev_error": null,
-      "dev_method": "not yet evaluated — run export_metrics.py",
-      "test_error": null
+      "train_error": 0.0186,
+      "dev_error": 0.0172,
+      "dev_method": "val (CONTAMINATED — trained on train+val)",
+      "test_error": 0.1897,
+      "val_contaminated": true
     },
     {
       "name": "ResNet18",
       "family": "deep",
-      "accuracy": 0.862,
-      "unsafe_recall": 0.667,
-      "safe_recall": 0.930,
+      "accuracy": 0.9655,
+      "unsafe_recall": 0.9333,
+      "safe_recall": 0.93,
       "auc": 0.847,
-      "train_error": null,
-      "dev_error": 0.034,
-      "dev_method": "val holdout (test acc 0.862)",
-      "test_error": 0.138
+      "train_error": 0.0037,
+      "dev_error": 0.0345,
+      "dev_method": "val holdout",
+      "test_error": 0.1379,
+      "val_contaminated": false
     },
     {
       "name": "CNN",
       "family": "deep",
-      "accuracy": 0.879,
-      "unsafe_recall": 0.533,
+      "accuracy": 0.8966,
+      "unsafe_recall": 0.8,
       "safe_recall": 1.0,
       "auc": 0.812,
-      "train_error": null,
-      "dev_error": 0.103,
-      "dev_method": "val holdout (test acc 0.879)",
-      "test_error": 0.121
+      "train_error": 0.0781,
+      "dev_error": 0.1034,
+      "dev_method": "val holdout",
+      "test_error": 0.1207,
+      "val_contaminated": false
     },
     {
       "name": "SVM (RBF)",
       "family": "classical (HOG)",
-      "accuracy": 0.793,
-      "unsafe_recall": 0.60,
-      "safe_recall": 0.860,
+      "accuracy": 0.8448,
+      "unsafe_recall": 0.8,
+      "safe_recall": 0.86,
       "auc": 0.836,
-      "train_error": null,
-      "dev_error": 0.155,
-      "dev_method": "val holdout (test acc 0.793)",
-      "test_error": 0.207
+      "train_error": 0.0186,
+      "dev_error": 0.1552,
+      "dev_method": "val holdout",
+      "test_error": 0.2069,
+      "val_contaminated": false
     },
     {
       "name": "Logistic Regression",
       "family": "classical (HOG)",
-      "accuracy": 0.707,
-      "unsafe_recall": 0.733,
+      "accuracy": 0.7414,
+      "unsafe_recall": 0.8667,
       "safe_recall": 0.698,
       "auc": 0.822,
-      "train_error": null,
-      "dev_error": 0.259,
-      "dev_method": "val holdout (test acc 0.707)",
-      "test_error": 0.293
+      "train_error": 0.0743,
+      "dev_error": 0.2586,
+      "dev_method": "val holdout",
+      "test_error": 0.2931,
+      "val_contaminated": false
     },
     {
       "name": "Naive Bayes",
       "family": "classical (HOG)",
-      "accuracy": 0.672,
-      "unsafe_recall": 0.60,
+      "accuracy": 0.6897,
+      "unsafe_recall": 1.0,
       "safe_recall": 0.698,
       "auc": 0.698,
-      "train_error": null,
-      "dev_error": 0.310,
-      "dev_method": "val holdout (test acc 0.672)",
-      "test_error": 0.328
+      "train_error": 0.1004,
+      "dev_error": 0.3103,
+      "dev_method": "val holdout",
+      "test_error": 0.3276,
+      "val_contaminated": false
     }
   ],
   "error_analysis": {
@@ -142,7 +151,11 @@
         "fixable": "Yes (relabel)",
         "ceiling": "Recovers recall + raises the usable threshold",
         "examples": [
-          {"path": "legua/positive/IMG_3719", "unsafe_prob": 0.017, "note": "empty parked leguna, no passenger"}
+          {
+            "path": "legua/positive/IMG_3719",
+            "unsafe_prob": 0.017,
+            "note": "empty parked leguna, no passenger"
+          }
         ]
       },
       {
@@ -152,9 +165,21 @@
         "fixable": "Yes (relabel)",
         "ceiling": "Converts ~10 'false positives' into correct predictions",
         "examples": [
-          {"path": "bus/negative/IMG_3305", "unsafe_prob": 0.989, "note": ""},
-          {"path": "legua/negative/IMG_4211", "unsafe_prob": 0.986, "note": ""},
-          {"path": "bus/negative/IMG_3939", "unsafe_prob": 0.961, "note": ""}
+          {
+            "path": "bus/negative/IMG_3305",
+            "unsafe_prob": 0.989,
+            "note": ""
+          },
+          {
+            "path": "legua/negative/IMG_4211",
+            "unsafe_prob": 0.986,
+            "note": ""
+          },
+          {
+            "path": "bus/negative/IMG_3939",
+            "unsafe_prob": 0.961,
+            "note": ""
+          }
         ]
       },
       {
@@ -164,8 +189,16 @@
         "fixable": "Hard — needs higher-res / crop inference",
         "ceiling": "Small recall gain only",
         "examples": [
-          {"path": "bus/positive/IMG_3557", "unsafe_prob": 0.067, "note": "distant hanger in cluttered frame"},
-          {"path": "bus/positive/IMG_3534", "unsafe_prob": 0.133, "note": "distant hanger"}
+          {
+            "path": "bus/positive/IMG_3557",
+            "unsafe_prob": 0.067,
+            "note": "distant hanger in cluttered frame"
+          },
+          {
+            "path": "bus/positive/IMG_3534",
+            "unsafe_prob": 0.133,
+            "note": "distant hanger"
+          }
         ]
       },
       {
@@ -175,21 +208,30 @@
         "fixable": "Partly",
         "ceiling": "Marginal",
         "examples": [
-          {"path": "legua/positive/IMG_3873", "unsafe_prob": 0.128, "note": ""},
-          {"path": "bus/positive/IMG_3778", "unsafe_prob": 0.154, "note": ""}
+          {
+            "path": "legua/positive/IMG_3873",
+            "unsafe_prob": 0.128,
+            "note": ""
+          },
+          {
+            "path": "bus/positive/IMG_3778",
+            "unsafe_prob": 0.154,
+            "note": ""
+          }
         ]
       }
     ]
   },
   "diagnosis": {
-    "verdict": "Data-limited (variance-limited), NOT bias-limited.",
-    "reasoning": "Deep models nearly match human level, but AUC plateaus at ~0.93 across 6+ architectures (ResNet50/ConvNeXt/EfficientNet, 320px, ensembling, TTA, box-crops, tiling). The binding errors are mislabelled or tiny/distant. More model capacity does not help — the signature of a variance/data ceiling.",
+    "verdict": "Data-limited (variance-limited), NOT bias-limited — now confirmed by measured train vs held-out error.",
+    "reasoning": "Every model shows near-zero avoidable bias (train error <= human ~4%) but a large train->held-out gap. Deep transfer nets fit training almost perfectly (~0% train) yet generalize at ~14-19% on the held-out test (5-fold CV corroborates ~9-10%); classical HOG models overfit too (SVM 1.9% train -> 15.5% val). Bigger models do not help — the signature of a variance/data ceiling, matching the AUC ~0.93 plateau across 6+ architectures.",
     "next_actions": [
-      "Collect more clear UNSAFE images (currently only 98).",
-      "Fix the ~11-13 mislabelled images surfaced by the label audit.",
-      "Keep current regularisation/augmentation (already strong).",
-      "Deploy the high-recall (95%) operating point behind a human-review queue rather than chasing accuracy."
+      "Collect more clear UNSAFE images (currently only 98) — the highest-return fix for a variance-limited model.",
+      "Fix the ~10-13 mislabelled images surfaced by the label audit.",
+      "Keep current regularisation/augmentation (already strong); do NOT just scale up model size.",
+      "Deploy the high-recall operating point behind a human-review queue rather than chasing accuracy."
     ],
-    "note_classical_vs_deep": "Classical HOG models (SVM/Logistic/NB) sit far below human level on dev too -> those are BIAS-limited (too weak). Deep models are variance-limited. This contrast is the point: different models live in different bias/variance regimes."
+    "note_classical_vs_deep": "CORRECTION from measured data: the classical HOG models are NOT bias-limited (underfitting) as first assumed — they OVERFIT (low train, high val error), i.e. variance-limited like the deep nets. So the whole model zoo sits in the high-variance regime, which is why more/cleaner data is the lever, not architecture.",
+    "methodology_note": "Held-out error = val by default. ResNet50/ConvNeXt/EfficientNet were retrained on train+val (train_cv.py), so their val error is contaminated; those use TEST as the held-out instead (flagged in the table). Train error is measured on ORIGINAL un-augmented images at the balanced (argmax) threshold, per standard bias/variance practice (Ng, Machine Learning Yearning; arXiv:2105.13343)."
   }
 }

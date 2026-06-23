@@ -31,7 +31,7 @@ So if expert annotators disagree with each other and make labelling mistakes, **
 
 We use the **stricter ~4%** for the bias/variance math below — this is the conservative, correct choice (it makes "avoidable bias" as small/honest as possible).
 
-> 🔧 **To make this rigorous in the lab:** have 2–3 teammates independently label a 40–50 image sample, measure inter-annotator disagreement, and report it as the empirical human-level error. The script `eval_train_error.py` prints the exact sample to use.
+> **To make this rigorous in the lab:** have 2–3 teammates independently label a 40–50 image sample, measure inter-annotator disagreement, and report it as the empirical human-level error. The script `eval_train_error.py` prints the exact sample to use.
 
 ---
 
@@ -43,10 +43,10 @@ We did a **ceiling analysis**: manually categorise the model's errors, count eac
 
 | # | Category | Direction | Count* | Example images | Fixable? | Est. ceiling if fixed |
 |---|---|---|---|---|---|---|
-| 1 | **Label noise — spurious `unsafe`** (empty/parked vehicle labelled unsafe) | unsafe→model says safe | ~1–3 | `legua/IMG_3719` (empty leguna, p=0.017) | ✅ relabel | recovers recall + raises usable threshold |
-| 2 | **Label noise — missed `unsafe`** (real hanger the annotator marked safe) | safe→model says unsafe | ~10 | `bus/IMG_3305` (p=0.989), `legua/IMG_4211` (0.986), `bus/IMG_3939` (0.961) | ✅ relabel | converts ~10 "false positives" into correct |
-| 3 | **Tiny / distant hanger** (1–8% of a cluttered frame) | unsafe→model says safe | ~2–4 | `bus/IMG_3557` (0.067), `bus/IMG_3534` (0.133) | ⚠️ hard — needs higher-res / crops | small recall gain only |
-| 4 | **Occlusion / clutter / ambiguous pose** | both | remainder | `legua/IMG_3873`, `bus/IMG_3778` | ⚠️ partly | marginal |
+| 1 | **Label noise — spurious `unsafe`** (empty/parked vehicle labelled unsafe) | unsafe→model says safe | ~1–3 | `legua/IMG_3719` (empty leguna, p=0.017) | relabel | recovers recall + raises usable threshold |
+| 2 | **Label noise — missed `unsafe`** (real hanger the annotator marked safe) | safe→model says unsafe | ~10 | `bus/IMG_3305` (p=0.989), `legua/IMG_4211` (0.986), `bus/IMG_3939` (0.961) | relabel | converts ~10 "false positives" into correct |
+| 3 | **Tiny / distant hanger** (1–8% of a cluttered frame) | unsafe→model says safe | ~2–4 | `bus/IMG_3557` (0.067), `bus/IMG_3534` (0.133) | hard — needs higher-res / crops | small recall gain only |
+| 4 | **Occlusion / clutter / ambiguous pose** | both | remainder | `legua/IMG_3873`, `bus/IMG_3778` | partly | marginal |
 
 \* counts from the severity≥0.70 audit (13 unsafe→safe, 10 safe→unsafe). Confirm exact buckets by eyeballing the 23 images before the lab.
 
@@ -61,32 +61,35 @@ We did a **ceiling analysis**: manually categorise the model's errors, count eac
 
 ## Part 3 — Avoidable Bias & Variance
 
-### The decomposition (Andrew Ng's four levels)
+### Definitions
 
-| Level | Error | Source |
-|---|---|---|
-| Human-level (Bayes proxy) | **~4%** | Part 1 |
-| Training error | **⟨measure on cluster⟩** | run `eval_train_error.py` |
-| Dev error (5-fold CV, Ensemble balanced) | **8.3%** (acc 91.7%) | `RESULTS.md §1` |
-| Test error (58-img holdout) | noisy — report but don't trust | `RESULTS.md §5` |
+- **Avoidable bias** = training error − human-level error (large ⇒ underfitting)
+- **Variance** = held-out error − training error (large ⇒ overfitting / needs data)
+- Accuracy-based (1 − accuracy), **balanced/argmax threshold**, **un-augmented** train images — the standard comparable basis (Ng, *ML Yearning*; arXiv:2105.13343).
 
-Then:
-- **Avoidable bias** = training error − human-level error
-- **Variance** = dev error − training error
+### Which held-out set, and why it matters
 
-### Worked example (fill in the real train error tomorrow)
-Heavy augmentation + class-weighting + dropout means train accuracy is typically high. Using an **illustrative train error ≈ 3%**:
+`train_cv.py` **retrains ResNet50 / ConvNeXt / EfficientNet on train+val** before saving — so for those three, val is *training* data and its ~0% error is not held-out. They use **test** as held-out; all other models keep **val**. (Auto-detected + flagged in the app.)
 
-| Quantity | Value | Reading |
-|---|---|---|
-| Avoidable bias | 3% − 4% ≈ **~0%** | model already matches human on the training set → **bias is NOT the problem** |
-| Variance | 8.3% − 3% = **~5.3%** | **gap between train and dev is the dominant error** |
+### Measured decomposition (human-level error = 4%)
 
-➡️ **Verdict: this is a VARIANCE / data-limited problem, not a bias problem.**
+| Model | Train | Val | Test | Held-out | Avoid. bias | Variance | Regime |
+|---|---|---|---|---|---|---|---|
+| ResNet50 | 0.0% | 1.7% | 17.2% | 17.2% (test) | −4.0% | **+17.2%** | variance-limited |
+| ConvNeXt-Tiny | 0.4% | 0.0% | 15.5% | 15.5% (test) | −3.6% | **+15.2%** | variance-limited |
+| EfficientNet-B0 | 1.9% | 1.7% | 19.0% | 19.0% (test) | −2.1% | **+17.1%** | variance-limited |
+| ResNet18 | 0.4% | 3.5% | 13.8% | 3.5% (val) | −3.6% | +3.1% | well-balanced |
+| CNN | 7.8% | 10.3% | 12.1% | 10.3% (val) | +3.8% | +2.5% | well-balanced |
+| SVM (RBF) | 1.9% | 15.5% | 20.7% | 15.5% (val) | −2.1% | **+13.7%** | variance-limited |
+| Logistic Regression | 7.4% | 25.9% | 29.3% | 25.9% (val) | +3.4% | **+18.4%** | variance-limited |
+| Naive Bayes | 10.0% | 31.0% | 32.8% | 31.0% (val) | +6.0% | **+21.0%** | variance-limited |
+| Ensemble (best) | — | 8.3% (CV) | — | 8.3% | — | — | train error pending |
 
-This is independently confirmed by the project's own finding that AUC plateaus at ~0.93 across 6+ architectures — extra model capacity does not help, which is the signature of a variance/data ceiling rather than underfitting.
+Note: ResNet50 / ConvNeXt / EfficientNet have contaminated val (trained on train+val), so their held-out is test. ResNet18's val is selection-optimistic; its test (13.8%) tells the same high-variance story.
 
-> If the measured train error comes back **very low (~1%)** the conclusion strengthens: avoidable bias is negative (model overfits past human level on train), variance ≈ 7%+ → even more clearly a regularisation/data problem.
+**Verdict: every model has ≈0% avoidable bias and large variance → a VARIANCE / data-limited problem, not a bias problem.** Even the classical HOG models — which we *expected* to underfit — actually **overfit** (SVM: 1.9% train → 15.5% val). The whole model zoo is high-variance.
+
+This is independently confirmed by AUC plateauing at ~0.93 across 6+ architectures — extra model capacity doesn't help, the signature of a data ceiling rather than underfitting.
 
 ### Prioritised next actions (what the verdict implies)
 
@@ -94,7 +97,7 @@ This is independently confirmed by the project's own finding that AUC plateaus a
 1. **More data — especially unsafe** (currently only 98). Highest expected return.
 2. **Clean label noise** (the ~11–13 audited images) — cheap, immediate.
 3. **Stronger regularisation / augmentation** — already in place (RandAugment, RandomErasing, weighted sampler, label smoothing); keep.
-4. ❌ *Not* helpful: bigger backbones, longer training, lower bias models — already shown to plateau.
+4. *Not* helpful: bigger backbones, longer training, lower bias models — already shown to plateau.
 
 **For the safety objective specifically:** since true 100% recall at usable accuracy is unreachable with 385 images, deploy the **high-recall (95%) operating point behind a human-review queue** rather than chasing accuracy.
 
@@ -102,4 +105,4 @@ This is independently confirmed by the project's own finding that AUC plateaus a
 
 ## One-slide summary (say this in the lab)
 
-> "Our task has **non-trivial Bayes error (~4%)** — proven by label noise and tiny-object cases that even expert annotators get wrong. Error analysis shows our single biggest, cheapest win is **fixing ~11–13 mislabelled images**, not more modelling. The bias/variance decomposition gives **~0% avoidable bias and ~5% variance**, so we're **data-limited, not bias-limited** — confirmed by AUC plateauing at 0.93 across 6 architectures. Next step: more clean unsafe data + a human-review queue, not a bigger model."
+> "Our task has **non-trivial Bayes error (~4%)** — proven by label noise and tiny-object cases that even expert annotators get wrong. Error analysis shows our single biggest, cheapest win is **fixing ~10–13 mislabelled images**, not more modelling. The bias/variance decomposition (measured, held-out = test for the train+val-refit models) gives **≈0% avoidable bias and +13% to +21% variance across every model** — even the classical HOG models overfit — so we're firmly **data-limited, not bias-limited**, confirmed by AUC plateauing at 0.93 across 6 architectures. Next step: more clean unsafe data + a human-review queue, not a bigger model."

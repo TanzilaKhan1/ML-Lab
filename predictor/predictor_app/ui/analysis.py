@@ -51,26 +51,39 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
     st.markdown("### 📉 Avoidable Bias & Variance (per model)")
     st.caption(
         f"**Avoidable bias** = train error − human error ({_pct(human_error)}). Large ⇒ underfitting.  \n"
-        "**Variance** = dev error − train error. Large ⇒ overfitting / needs more data.  \n"
-        "These are computed **per model** because each has its own train/dev error."
+        "**Variance** = held-out error − train error. Large ⇒ overfitting / needs more data.  \n"
+        "Computed **per model**. Held-out error uses **val** by default; for models marked "
+        "⚠️ (retrained on train+val, so their val is contaminated) it uses **test** instead."
     )
-    headers = ["Model", "Human", "Train", "Dev", "Avoid. bias", "Variance", "Diagnosis"]
+    headers = ["Model", "Train", "Val", "Test", "Held-out", "Avoid. bias", "Variance", "Diagnosis"]
     rows = []
+    any_contam = False
     for d in diags:
+        flag = " ⚠️" if d.val_contaminated else ""
+        if d.val_contaminated:
+            any_contam = True
         rows.append([
             f"**{d.name}**",
-            _pct(d.human_error),
             _pct(d.train_error),
             _pct(d.dev_error),
+            _pct(d.test_error),
+            f"{_pct(d.held_out_error)}{flag}",
             _signed_pct(d.avoidable_bias),
             _signed_pct(d.variance),
             d.regime,
         ])
     st.markdown(_md_table(headers, rows))
+    if any_contam:
+        st.caption(
+            "⚠️ **ResNet50 / ConvNeXt / EfficientNet** were retrained on **train+val** before "
+            "saving (`train_cv.py`), so their val error (~0%) is really *training* error, not a "
+            "held-out estimate. For an honest variance figure these models use **test** as the "
+            "held-out set; all other models use **val**."
+        )
     if all(d.train_error is None for d in diags):
         st.warning(
             "**Train error not measured yet** — avoidable bias & variance can't be computed. "
-            "Run `python model/export_metrics.py` on the cluster (where the dataset lives), "
+            "Run `python model/export_metrics.py` where the dataset lives, "
             "commit the refreshed `metrics.json`, and reboot the app. The table fills in automatically."
         )
 
@@ -129,6 +142,9 @@ def _render_diagnosis(dg: dict) -> None:
         st.markdown("\n".join(f"{i+1}. {a}" for i, a in enumerate(actions)))
     if dg.get("note_classical_vs_deep"):
         st.caption(dg["note_classical_vs_deep"])
+    if dg.get("methodology_note"):
+        with st.expander("Methodology — how train/held-out error & bias/variance are computed"):
+            st.markdown(dg["methodology_note"])
 
 
 def render_analysis_page() -> None:
