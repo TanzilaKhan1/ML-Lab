@@ -1,0 +1,195 @@
+{
+  "_README": "SOURCE OF TRUTH for the app's Model Analysis tab. Do NOT hand-edit the per-model error numbers in production — regenerate this file by running `python model/export_metrics.py` ON THE CLUSTER (where the dataset lives) after you retrain. The app reads this file and computes avoidable-bias/variance live, so: retrain -> export_metrics.py -> commit -> reboot app -> tab updates automatically.",
+  "generated": "seed (from RESULTS.md + all_results.json) — run export_metrics.py on the cluster to refresh with measured train error",
+  "task": {
+    "name": "Door-Hanging Safety Classifier",
+    "description": "Binary image classification: is a passenger hanging on the door of a bus/leguna (unsafe) or not (safe)?",
+    "n_images": 385,
+    "n_safe": 287,
+    "n_unsafe": 98,
+    "imbalance": "2.9:1 (safe:unsafe)",
+    "split": "70/15/15 stratified (train 269 / val 58 / test 58); deep models use 5-fold CV on the 327 train+val for a reliable estimate",
+    "majority_baseline_accuracy": 0.745,
+    "primary_metric_note": "Because data is imbalanced 2.9:1, watch UNSAFE-RECALL (catching violations), not just accuracy. A 'always safe' model already scores 74.5% accuracy while catching 0 violations."
+  },
+  "human_level": {
+    "error": 0.04,
+    "accuracy": 0.96,
+    "definition": "Careful expert reviewing the full-resolution image (can zoom). Used as the Bayes-error proxy.",
+    "alt_quick_glance_error": 0.09,
+    "why_not_zero": "Irreducible error is above 0: the annotations themselves contain mistakes (e.g. legua/IMG_3719 is an empty parked leguna labelled 'unsafe'), and some unsafe hangers occupy only 1-8% of a cluttered frame. Even expert humans miss/dispute these.",
+    "how_to_measure": "Have 2-3 teammates label a 40-50 image blind sample (run `python model/export_metrics.py --hlp-sample 50`); the inter-annotator disagreement rate is your empirical human-level error. Update this field with the result."
+  },
+  "models": [
+    {
+      "name": "Ensemble (best)",
+      "family": "deep",
+      "accuracy": 0.917,
+      "unsafe_recall": 0.807,
+      "safe_recall": 0.955,
+      "auc": 0.929,
+      "train_error": null,
+      "dev_error": 0.083,
+      "dev_method": "5-fold CV (balanced operating point)",
+      "test_error": null
+    },
+    {
+      "name": "ResNet50",
+      "family": "deep",
+      "accuracy": 0.905,
+      "unsafe_recall": 0.843,
+      "safe_recall": 0.926,
+      "auc": 0.919,
+      "train_error": null,
+      "dev_error": 0.095,
+      "dev_method": "5-fold CV",
+      "test_error": null
+    },
+    {
+      "name": "ConvNeXt-Tiny",
+      "family": "deep",
+      "accuracy": 0.905,
+      "unsafe_recall": 0.819,
+      "safe_recall": 0.934,
+      "auc": 0.923,
+      "train_error": null,
+      "dev_error": 0.095,
+      "dev_method": "5-fold CV",
+      "test_error": null
+    },
+    {
+      "name": "EfficientNet-B0",
+      "family": "deep",
+      "accuracy": null,
+      "unsafe_recall": null,
+      "safe_recall": null,
+      "auc": null,
+      "train_error": null,
+      "dev_error": null,
+      "dev_method": "not yet evaluated — run export_metrics.py",
+      "test_error": null
+    },
+    {
+      "name": "ResNet18",
+      "family": "deep",
+      "accuracy": 0.862,
+      "unsafe_recall": 0.667,
+      "safe_recall": 0.930,
+      "auc": 0.847,
+      "train_error": null,
+      "dev_error": 0.034,
+      "dev_method": "val holdout (test acc 0.862)",
+      "test_error": 0.138
+    },
+    {
+      "name": "CNN",
+      "family": "deep",
+      "accuracy": 0.879,
+      "unsafe_recall": 0.533,
+      "safe_recall": 1.0,
+      "auc": 0.812,
+      "train_error": null,
+      "dev_error": 0.103,
+      "dev_method": "val holdout (test acc 0.879)",
+      "test_error": 0.121
+    },
+    {
+      "name": "SVM (RBF)",
+      "family": "classical (HOG)",
+      "accuracy": 0.793,
+      "unsafe_recall": 0.60,
+      "safe_recall": 0.860,
+      "auc": 0.836,
+      "train_error": null,
+      "dev_error": 0.155,
+      "dev_method": "val holdout (test acc 0.793)",
+      "test_error": 0.207
+    },
+    {
+      "name": "Logistic Regression",
+      "family": "classical (HOG)",
+      "accuracy": 0.707,
+      "unsafe_recall": 0.733,
+      "safe_recall": 0.698,
+      "auc": 0.822,
+      "train_error": null,
+      "dev_error": 0.259,
+      "dev_method": "val holdout (test acc 0.707)",
+      "test_error": 0.293
+    },
+    {
+      "name": "Naive Bayes",
+      "family": "classical (HOG)",
+      "accuracy": 0.672,
+      "unsafe_recall": 0.60,
+      "safe_recall": 0.698,
+      "auc": 0.698,
+      "train_error": null,
+      "dev_error": 0.310,
+      "dev_method": "val holdout (test acc 0.672)",
+      "test_error": 0.328
+    }
+  ],
+  "error_analysis": {
+    "model": "Ensemble (best)",
+    "summary": "Of 83 unsafe images, only ~6 score below 0.5 confidence. The biggest, cheapest win is fixing mislabelled images (~11-13), NOT more modelling — AUC plateaued at ~0.93 across 6+ architectures, the signature of a data ceiling.",
+    "image_base_url": "https://ml-lab-bmiv.onrender.com",
+    "categories": [
+      {
+        "category": "Label noise — spurious 'unsafe'",
+        "direction": "unsafe -> model says safe",
+        "count": "1-3",
+        "fixable": "Yes (relabel)",
+        "ceiling": "Recovers recall + raises the usable threshold",
+        "examples": [
+          {"path": "legua/positive/IMG_3719", "unsafe_prob": 0.017, "note": "empty parked leguna, no passenger"}
+        ]
+      },
+      {
+        "category": "Label noise — missed 'unsafe'",
+        "direction": "safe -> model says unsafe",
+        "count": "~10",
+        "fixable": "Yes (relabel)",
+        "ceiling": "Converts ~10 'false positives' into correct predictions",
+        "examples": [
+          {"path": "bus/negative/IMG_3305", "unsafe_prob": 0.989, "note": ""},
+          {"path": "legua/negative/IMG_4211", "unsafe_prob": 0.986, "note": ""},
+          {"path": "bus/negative/IMG_3939", "unsafe_prob": 0.961, "note": ""}
+        ]
+      },
+      {
+        "category": "Tiny / distant hanger (1-8% of frame)",
+        "direction": "unsafe -> model says safe",
+        "count": "~2-4",
+        "fixable": "Hard — needs higher-res / crop inference",
+        "ceiling": "Small recall gain only",
+        "examples": [
+          {"path": "bus/positive/IMG_3557", "unsafe_prob": 0.067, "note": "distant hanger in cluttered frame"},
+          {"path": "bus/positive/IMG_3534", "unsafe_prob": 0.133, "note": "distant hanger"}
+        ]
+      },
+      {
+        "category": "Occlusion / clutter / ambiguous pose",
+        "direction": "both",
+        "count": "remainder",
+        "fixable": "Partly",
+        "ceiling": "Marginal",
+        "examples": [
+          {"path": "legua/positive/IMG_3873", "unsafe_prob": 0.128, "note": ""},
+          {"path": "bus/positive/IMG_3778", "unsafe_prob": 0.154, "note": ""}
+        ]
+      }
+    ]
+  },
+  "diagnosis": {
+    "verdict": "Data-limited (variance-limited), NOT bias-limited.",
+    "reasoning": "Deep models nearly match human level, but AUC plateaus at ~0.93 across 6+ architectures (ResNet50/ConvNeXt/EfficientNet, 320px, ensembling, TTA, box-crops, tiling). The binding errors are mislabelled or tiny/distant. More model capacity does not help — the signature of a variance/data ceiling.",
+    "next_actions": [
+      "Collect more clear UNSAFE images (currently only 98).",
+      "Fix the ~11-13 mislabelled images surfaced by the label audit.",
+      "Keep current regularisation/augmentation (already strong).",
+      "Deploy the high-recall (95%) operating point behind a human-review queue rather than chasing accuracy."
+    ],
+    "note_classical_vs_deep": "Classical HOG models (SVM/Logistic/NB) sit far below human level on dev too -> those are BIAS-limited (too weak). Deep models are variance-limited. This contrast is the point: different models live in different bias/variance regimes."
+  }
+}

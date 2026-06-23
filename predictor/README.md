@@ -38,14 +38,29 @@ folder so it stays independent of the training/research env at the repo root.
 
 ### Available models
 
-| Display name | Weights file |
-|---|---|
-| Logistic Regression | `model/logistic_model.joblib` |
-| SVM (RBF) | `model/svm_model.joblib` |
-| Naive Bayes | `model/naive_bayes_model.joblib` |
+| Display name | Weights file | Kind |
+|---|---|---|
+| Ensemble (best) | `model/ensemble.json` | torch ensemble (ResNet50 + ConvNeXt) |
+| ResNet50 | `model/resnet50.joblib` | torch transfer |
+| ConvNeXt-Tiny | `model/convnext_tiny.joblib` | torch transfer |
+| EfficientNet-B0 | `model/efficientnet_b0.joblib` | torch transfer |
+| CNN | `model/cnn_model.joblib` | torch (custom SmallCNN) |
+| ResNet18 | `model/resnet_model.joblib` | torch transfer |
+| SVM (RBF) | `model/svm_model.joblib` | sklearn (HOG features) |
+| Logistic Regression | `model/logistic_model.joblib` | sklearn (HOG features) |
+| Naive Bayes | `model/naive_bayes_model.joblib` | sklearn (HOG features) |
 
 Switch between them from the sidebar; predictions and the explanation update
-live.
+live. Torch models consume the raw 512×512 image; the sklearn models consume
+the HOG feature vector described above. Only the model currently selected is
+held in memory (see `load_model`'s `lru_cache(maxsize=1)`), which keeps the
+app within small cloud hosts' memory limits.
+
+> **Deployment note:** `resnet50.joblib` and `convnext_tiny.joblib` (hence the
+> Ensemble) are tracked via **Git LFS**. Hosts that don't fetch LFS (e.g.
+> Streamlit Community Cloud) clone pointer files instead of the real weights, so
+> those three options error if selected there until the weights are made
+> available another way. The Model Analysis tab is unaffected.
 
 ---
 
@@ -91,9 +106,59 @@ pipeline as a black box.
 - A fixed `random_state=42` is passed to both LIME and SLIC for reproducible
   explanations across runs of the same image.
 
-Perturbation count is adjustable in the sidebar (200 – 2000). More samples →
-smoother map, slower (a few seconds → ~30s). The default of 600 typically
-finishes in under 5 s on a modern laptop.
+Perturbation count is adjustable in the sidebar (100 – 2000). More samples →
+smoother map, slower (a few seconds → ~30s). The default of 200 keeps memory
+and latency low on small cloud hosts; raise it for a smoother map.
+
+---
+
+## The Model Analysis tab (dynamic)
+
+The app has a second tab, **📊 Model Analysis**, that presents the project
+through the standard ML-debugging lens — **error analysis, human-level
+performance, and avoidable bias vs variance** — for every model.
+
+**What it shows**
+
+- **Human-level performance** — the Bayes-error proxy (a property of the *task*,
+  so it is shared across all models).
+- **Per-model performance** — accuracy, unsafe-recall, AUC.
+- **Avoidable bias & variance** — `avoidable_bias = train_error − human_error`
+  and `variance = dev_error − train_error`, computed **per model**, with a
+  plain-language read of each model's regime (under/over-fitting).
+- **Error analysis** — the model's mistakes grouped by *reason* (label noise,
+  tiny/distant hanger, occlusion), with example images linking to the
+  annotator app.
+- **Overall diagnosis** — the headline verdict and prioritised next actions.
+
+**How it works (high level)**
+
+The app is deployed **without the dataset**, so it never recomputes errors from
+the model files. Instead it reads a single data file, `model/metrics.json`, and
+computes only the *derived* quantities (avoidable bias, variance) live. This
+keeps the tab **dynamic, not hard-coded**:
+
+```
+retrain a model
+   └─► python model/export_metrics.py        # ON THE CLUSTER (where the data lives):
+                                              #   measures train/val/test error per model
+                                              #   and rewrites model/metrics.json
+        └─► commit the refreshed metrics.json
+             └─► reboot the app  ─►  the tab updates automatically
+```
+
+So the responsibilities split cleanly:
+
+| Concern | Where | Why |
+|---|---|---|
+| Measuring train/dev/test error | `model/export_metrics.py` (cluster) | only the cluster has the dataset |
+| Storing the numbers | `model/metrics.json` (committed) | single source of truth, lightweight |
+| Reading + deriving bias/variance | `predictor_app/metrics.py` | no dataset needed, runs in-app |
+| Rendering the tab | `predictor_app/ui/analysis.py` | pure presentation |
+
+The human-level value and the error-analysis categories are human judgements,
+so `export_metrics.py` **preserves** those sections and only overwrites the
+measured per-model numbers.
 
 ---
 
@@ -111,12 +176,19 @@ predictor/
     ├── __init__.py            # public exports
     ├── config.py              # paths, defaults, colour palette
     ├── preprocess.py          # standardize_image + HOG feature extraction
-    ├── inference.py           # load_model + predict (joblib pipelines)
+    ├── inference.py           # load_model + predict (joblib pipelines + torch wrappers)
+    ├── torch_models.py        # torch checkpoint loaders (CNN/ResNet/transfer/ensemble)
     ├── explain.py             # LIME wrapper returning a LimeExplanation dataclass
+    ├── metrics.py             # reads metrics.json, derives avoidable bias / variance
     └── ui/                    # presentation layer (Streamlit only)
         ├── theme.py           # page_config() + apply_theme() (CSS)
-        └── components.py      # render_sidebar / header / upload / prediction / explanation
+        ├── components.py      # render_sidebar / header / upload / prediction / explanation
+        └── analysis.py        # the 📊 Model Analysis tab
 ```
+
+Model-analysis data + tooling live in [`../model/`](../model/):
+`metrics.json` (the data the tab reads) and `export_metrics.py` (regenerates it
+on the cluster after retraining).
 
 The domain layer (`preprocess`, `inference`, `explain`) has **zero Streamlit
 imports**, so the same code is reusable from a FastAPI route, a CLI, or a

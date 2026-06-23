@@ -24,6 +24,7 @@ from predictor_app.ui import (
     SidebarSettings,
     apply_theme,
     page_config,
+    render_analysis_page,
     render_explanation,
     render_header,
     render_prediction_card,
@@ -59,28 +60,7 @@ def _hash_bytes(b: bytes) -> str:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main() -> None:
-    page_config()
-    apply_theme()
-
-    render_header(
-        title="🚌 Door-Hanging Safety Predictor",
-        subtitle=(
-            "Upload a bus or leguna image — the classifier flags whether passengers "
-            "are hanging on the door, and LIME shows the regions that drove the call."
-        ),
-    )
-
-    models = list_models()
-    if not models:
-        st.error(
-            "No model `.joblib` files found under `model/`. "
-            "Train a model first (see `model/train_*.py`)."
-        )
-        return
-
-    settings: SidebarSettings = render_sidebar(models)
-
+def _render_predictor_tab(settings: SidebarSettings) -> None:
     uploaded = st.file_uploader(
         "Drop or browse an image",
         type=list(SUPPORTED_UPLOAD_EXTENSIONS),
@@ -126,6 +106,35 @@ def main() -> None:
         return
 
     render_explanation(exp)
+
+
+def main() -> None:
+    page_config()
+    apply_theme()
+
+    render_header(
+        title="🚌 Door-Hanging Safety Predictor",
+        subtitle=(
+            "Upload a bus or leguna image — the classifier flags whether passengers "
+            "are hanging on the door, and LIME shows the regions that drove the call."
+        ),
+    )
+
+    models = list_models()
+    if not models:
+        st.error(
+            "No model `.joblib` files found under `model/`. "
+            "Train a model first (see `model/train_*.py`)."
+        )
+        return
+
+    settings: SidebarSettings = render_sidebar(models)
+
+    tab_predict, tab_analysis = st.tabs(["🔍 Predictor", "📊 Model Analysis"])
+    with tab_predict:
+        _render_predictor_tab(settings)
+    with tab_analysis:
+        render_analysis_page()
 
 
 if __name__ == "__main__":
