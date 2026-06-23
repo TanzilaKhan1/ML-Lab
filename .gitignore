@@ -1,4 +1,8 @@
 node_modules/
+.DS_Store
+.streamlit/secrets.toml
+predictor/.streamlit/secrets.toml
+predictor/uv.lock
 
 predictor/__pycache__
 
@@ -27,6 +31,10 @@ model/outputs/
 model/outputs_*/
 predictor/model/outputs/
 model/model_backup_pretrained/
+predictor/model/.resnet50.joblib.download
+predictor/model/.convnext_tiny.joblib.download
+predictor/model/resnet50.joblib
+predictor/model/convnext_tiny.joblib
 
 # large duplicate model copies at model/ root — deployable copies live in predictor/model/
 model/resnet50.joblib

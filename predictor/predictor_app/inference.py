@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gc
+import json
 from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
@@ -12,7 +13,7 @@ import joblib
 import numpy as np
 from PIL import Image
 
-from .config import MODEL_DIR
+from .config import MODEL_DIR, ensure_model_file
 from .preprocess import ImageInput, preprocess_for_model, standardize_image
 
 # Label semantics (matches scan_dataset's alphabetical ordering and the saved
@@ -57,11 +58,31 @@ class Prediction:
 
 def list_models() -> dict[str, Path]:
     """Return {display_name: absolute_path} for every model file that exists on disk."""
-    return {
-        name: (MODEL_DIR / fname)
-        for name, (fname, _kind) in AVAILABLE_MODELS.items()
-        if (MODEL_DIR / fname).exists()
-    }
+    models: dict[str, Path] = {}
+    for name, (fname, kind) in AVAILABLE_MODELS.items():
+        path = ensure_model_file(fname, required=False)
+        if path is None:
+            continue
+        if kind == "ensemble" and not _ensemble_members_available(path):
+            continue
+        models[name] = path
+    return models
+
+
+def _ensemble_members(path: Path) -> list[str]:
+    try:
+        spec = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+    members = spec.get("members", [])
+    return [str(member) for member in members if isinstance(member, str)]
+
+
+def _ensemble_members_available(path: Path) -> bool:
+    members = _ensemble_members(path)
+    return bool(members) and all(
+        ensure_model_file(member, required=False) is not None for member in members
+    )
 
 
 # maxsize=1: only the *active* model stays resident. Switching models evicts
@@ -82,9 +103,7 @@ def load_model(model_name: str):
             f"Unknown model {model_name!r}. Available: {list(AVAILABLE_MODELS)}"
         )
     fname, kind = AVAILABLE_MODELS[model_name]
-    path = MODEL_DIR / fname
-    if not path.exists():
-        raise FileNotFoundError(f"Model weights not found at {path}")
+    path = ensure_model_file(fname)
 
     if kind == "sklearn":
         return joblib.load(path)
@@ -93,6 +112,8 @@ def load_model(model_name: str):
         from .torch_models import load_torch_checkpoint
         return load_torch_checkpoint(path, kind=kind)
     if kind == "ensemble":
+        for member in _ensemble_members(path):
+            ensure_model_file(member)
         from .torch_models import load_ensemble
         return load_ensemble(path)
     raise ValueError(f"Unknown model kind for {model_name!r}: {kind!r}")
