@@ -36,6 +36,13 @@ _LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/v1\n"
 _DOWNLOAD_TIMEOUT_SECONDS = int(os.environ.get("MODEL_DOWNLOAD_TIMEOUT_SECONDS", "900"))
 _MODEL_BASE_URL_ENV = "MODEL_BASE_URL"
 _MODEL_DOWNLOAD_TOKEN_ENV = "MODEL_DOWNLOAD_TOKEN"
+_DEFAULT_MODEL_BASE_URL = (
+    "https://github.com/TanzilaKhan1/ML-Lab/releases/download/model-weights-v1"
+)
+_DEFAULT_MODEL_SHA256_BY_FILE = {
+    "resnet50.joblib": "e012f9466f9273f15448d4dffc2eec5a52f5180b69ffecd46660c02c77469d35",
+    "convnext_tiny.joblib": "075f6823a489243831773de080997c5b4f4a68eb64659ab7e3f4e1992167d371",
+}
 
 # Primary env names are what Streamlit Cloud users should set in app secrets.
 # Alternate names keep the loader readable if this app is moved to another host.
@@ -62,7 +69,7 @@ def _download_url_for(filename: str) -> str | None:
     if explicit:
         return explicit
 
-    base_url = os.environ.get(_MODEL_BASE_URL_ENV)
+    base_url = os.environ.get(_MODEL_BASE_URL_ENV) or _DEFAULT_MODEL_BASE_URL
     if base_url:
         return f"{base_url.rstrip('/')}/{filename}"
     return None
@@ -70,7 +77,7 @@ def _download_url_for(filename: str) -> str | None:
 
 def _expected_sha256_for(filename: str) -> str | None:
     value = _first_env(_MODEL_SHA256_ENV_BY_FILE.get(filename, ()))
-    return value.lower() if value else None
+    return value.lower() if value else _DEFAULT_MODEL_SHA256_BY_FILE.get(filename)
 
 
 def is_git_lfs_pointer(path: Path) -> bool:

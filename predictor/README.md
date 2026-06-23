@@ -229,15 +229,16 @@ startup and caching them under `predictor/model/`.
 
 Use this flow for `resnet50.joblib` and `convnext_tiny.joblib`:
 
-1. The two files are hosted as assets on the GitHub Release
+1. The two files are hosted as assets on the public GitHub Release
    <https://github.com/TanzilaKhan1/ML-Lab/releases/tag/model-weights-v1>.
-2. In Streamlit Community Cloud, open the app settings and add these secrets:
+2. The app defaults to that release URL and verifies these SHA256 values:
    ```toml
    MODEL_BASE_URL = "https://github.com/TanzilaKhan1/ML-Lab/releases/download/model-weights-v1"
    RESNET50_JOBLIB_SHA256 = "e012f9466f9273f15448d4dffc2eec5a52f5180b69ffecd46660c02c77469d35"
    CONVNEXT_TINY_JOBLIB_SHA256 = "075f6823a489243831773de080997c5b4f4a68eb64659ab7e3f4e1992167d371"
    ```
-   If the files are moved to unrelated URLs later, set direct URLs instead:
+   You only need to add Streamlit secrets if you move the files later or want
+   to override the defaults:
    ```toml
    RESNET50_JOBLIB_URL = "https://..."
    CONVNEXT_TINY_JOBLIB_URL = "https://..."
