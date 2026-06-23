@@ -1,6 +1,7 @@
 """Load trained models (sklearn pipelines or torch state_dicts) and predict."""
 from __future__ import annotations
 
+import gc
 from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
@@ -63,13 +64,19 @@ def list_models() -> dict[str, Path]:
     }
 
 
-@lru_cache(maxsize=8)
+# maxsize=1: only the *active* model stays resident. Switching models evicts
+# the previous one so its (often large) torch weights can be freed — critical
+# on memory-capped hosts like Streamlit Community Cloud (~1 GB), where keeping
+# several torch models cached at once OOM-kills the container ("Oh no" page).
+@lru_cache(maxsize=1)
 def load_model(model_name: str):
-    """Load a model by display name. Cached for repeated calls.
+    """Load a model by display name. Cached for the most-recent call only.
 
     sklearn pipelines are returned directly. Torch checkpoints are hydrated
     into a ``TorchClassifier`` wrapper that exposes the same predict-like API.
     """
+    # Reclaim the previously-cached model's memory before loading a new one.
+    gc.collect()
     if model_name not in AVAILABLE_MODELS:
         raise ValueError(
             f"Unknown model {model_name!r}. Available: {list(AVAILABLE_MODELS)}"

@@ -30,8 +30,12 @@ SUPPORTED_UPLOAD_EXTENSIONS = ("png", "jpg", "jpeg", "webp", "bmp", "tiff", "hei
 
 @dataclass(frozen=True)
 class LimeDefaults:
-    num_samples: int = 600
-    num_samples_min: int = 200
+    # Lowered 600 -> 200: each sample is a 512x512 image pushed through the
+    # model, so the perturbation batch is a large transient memory spike.
+    # Keeping the default small avoids OOM on memory-capped hosts (Streamlit
+    # Cloud ~1 GB); users can still raise it via the sidebar slider.
+    num_samples: int = 200
+    num_samples_min: int = 100
     num_samples_max: int = 2000
     num_samples_step: int = 100
     top_regions: int = 5
