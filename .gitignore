@@ -43,3 +43,7 @@ model/efficientnet_b0.joblib
 
 # local-path artifact
 model/crops_index.json
+
+# error-analysis-lab: ignore everything except the reusable inference script
+error-analysis-lab/*
+!error-analysis-lab/run_all_models.py
