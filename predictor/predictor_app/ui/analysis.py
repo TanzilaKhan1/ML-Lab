@@ -32,54 +32,40 @@ def _md_table(headers: list[str], rows: list[list[str]]) -> str:
 
 
 def _render_human_level(hl: dict) -> None:
-    st.markdown("### 🧍 Human-Level Performance")
-    st.caption(
-        "Used as the **Bayes-error proxy** — the best score anyone could realistically get. "
-        "It is a property of the *task*, so it is the **same for every model**."
-    )
+    st.markdown("### 🧍 Human-Level Performance (Bayes-error proxy)")
     c1, c2, c3 = st.columns(3)
     c1.metric("Human-level accuracy", _pct(hl.get("accuracy")))
     c2.metric("Human-level error", _pct(hl.get("error")))
     c3.metric("Quick-glance error", _pct(hl.get("alt_quick_glance_error")))
     st.markdown(f"**Definition:** {hl.get('definition', '—')}")
+    if hl.get("sota"):
+        st.caption(f"**SOTA / literature:** {hl['sota']}")
     with st.expander("Why isn't human-level error 0%?"):
         st.markdown(hl.get("why_not_zero", "—"))
-        st.info(hl.get("how_to_measure", ""))
 
 
 def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> None:
     st.markdown("### 📉 Avoidable Bias & Variance (per model)")
     st.caption(
-        f"**Avoidable bias** = train error − human error ({_pct(human_error)}). Large ⇒ underfitting.  \n"
-        "**Variance** = held-out error − train error. Large ⇒ overfitting / needs more data.  \n"
-        "Computed **per model**. Held-out error uses **val** by default; for models marked "
-        "⚠️ (retrained on train+val, so their val is contaminated) it uses **test** instead."
+        f"**Avoidable bias** = train − human ({_pct(human_error)}), large ⇒ underfitting.  "
+        "**Variance** = held-out − train, large ⇒ overfitting / needs data.  \n"
+        "Held-out = **5-fold CV** for the deep transfer models (reliable, n=327) and "
+        "**held-out test** (n=58) for the rest — per the latest paper tables."
     )
-    headers = ["Model", "Train", "Val", "Test", "Held-out", "Avoid. bias", "Variance", "Diagnosis"]
+    headers = ["Model", "Train", "Held-out", "Test", "Avoid. bias", "Variance", "Diagnosis"]
     rows = []
-    any_contam = False
     for d in diags:
-        flag = " ⚠️" if d.val_contaminated else ""
-        if d.val_contaminated:
-            any_contam = True
+        basis = "CV" if "CV" in d.held_out_label else "test"
         rows.append([
             f"**{d.name}**",
             _pct(d.train_error),
-            _pct(d.dev_error),
+            f"{_pct(d.held_out_error)} ({basis})",
             _pct(d.test_error),
-            f"{_pct(d.held_out_error)}{flag}",
             _signed_pct(d.avoidable_bias),
             _signed_pct(d.variance),
             d.regime,
         ])
     st.markdown(_md_table(headers, rows))
-    if any_contam:
-        st.caption(
-            "⚠️ **ResNet50 / ConvNeXt / EfficientNet** were retrained on **train+val** before "
-            "saving (`train_cv.py`), so their val error (~0%) is really *training* error, not a "
-            "held-out estimate. For an honest variance figure these models use **test** as the "
-            "held-out set; all other models use **val**."
-        )
     if all(d.train_error is None for d in diags):
         st.warning(
             "**Train error not measured yet** — avoidable bias & variance can't be computed. "
