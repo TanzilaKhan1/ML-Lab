@@ -49,8 +49,10 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
     st.caption(
         f"**Avoidable bias** = train − human ({_pct(human_error)}), large ⇒ underfitting.  "
         "**Variance** = held-out − train, large ⇒ overfitting / needs data.  \n"
-        "Held-out = **5-fold CV** for the deep transfer models (reliable, n=327) and "
-        "**held-out test** (n=58) for the rest — per the latest paper tables."
+        "Held-out = **5-fold CV** for the deep transfer models (n=327, used because the "
+        "n=58 test is noisy — one image ≈ 6.7%) and **held-out test** (n=58) for the rest. "
+        "Note: CV is computed on the train+val images, so the deep-model variance here is a "
+        "lower bound; the **Test** column is the untouched-holdout cross-check."
     )
     headers = ["Model", "Train", "Held-out", "Test", "Avoid. bias", "Variance", "Diagnosis"]
     rows = []
@@ -76,13 +78,37 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
 
 def _render_performance(diags: list[ModelDiagnosis]) -> None:
     st.markdown("### 📊 Model performance")
-    st.caption("Headline metrics per model. For this 2.9:1-imbalanced safety task, **unsafe-recall** matters most.")
+    st.caption(
+        "For this 2.9:1-imbalanced safety task, **unsafe-recall** matters most. "
+        "Deep-model headline numbers are **5-fold CV over the 327 train+val images** "
+        "(used because one image moves the noisy n=58 test score ~6.7%); the rest are "
+        "**held-out test (n=58)**. CV is measured on data the models were selected on, so "
+        "it is optimistic-leaning — the untouched-test value is shown after `·` for the "
+        "deep models so both are visible."
+    )
+
+    def _cell(cv_val: Optional[float], test_val: Optional[float], is_cv: bool,
+              fmt=_pct) -> str:
+        """Headline value, plus the untouched-test value after `·` when the
+        headline is CV and a test value exists."""
+        head = fmt(cv_val)
+        if is_cv and test_val is not None:
+            return f"{head} · {fmt(test_val)} test"
+        return head
+
+    def _auc_fmt(x: Optional[float]) -> str:
+        return "—" if x is None else f"{x:.3f}"
+
     headers = ["Model", "Family", "Accuracy", "Unsafe-recall", "AUC", "Dev estimate"]
     rows = []
     for d in diags:
+        is_cv = d.headline_is_cv
         rows.append([
-            f"**{d.name}**", d.family, _pct(d.accuracy), _pct(d.unsafe_recall),
-            "—" if d.auc is None else f"{d.auc:.3f}", d.dev_method or "—",
+            f"**{d.name}**", d.family,
+            _cell(d.accuracy, d.test_accuracy, is_cv),
+            _cell(d.unsafe_recall, d.test_unsafe_recall, is_cv),
+            _cell(d.auc, d.test_auc, is_cv, fmt=_auc_fmt),
+            d.dev_method or "—",
         ])
     st.markdown(_md_table(headers, rows))
 
@@ -122,15 +148,6 @@ def _render_diagnosis(dg: dict) -> None:
     st.markdown("### 🧭 Overall Diagnosis")
     st.success(f"**Verdict: {dg.get('verdict', '—')}**")
     st.markdown(dg.get("reasoning", ""))
-    actions = dg.get("next_actions", [])
-    if actions:
-        st.markdown("**Next actions (in priority order):**")
-        st.markdown("\n".join(f"{i+1}. {a}" for i, a in enumerate(actions)))
-    if dg.get("note_classical_vs_deep"):
-        st.caption(dg["note_classical_vs_deep"])
-    if dg.get("methodology_note"):
-        with st.expander("Methodology — how train/held-out error & bias/variance are computed"):
-            st.markdown(dg["methodology_note"])
 
 
 def render_analysis_page() -> None:

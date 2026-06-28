@@ -28,6 +28,9 @@
       "unsafe_recall": 0.807,
       "safe_recall": null,
       "auc": 0.929,
+      "test_accuracy": 0.845,
+      "test_unsafe_recall": 0.667,
+      "test_auc": 0.901,
       "train_error": null,
       "dev_error": 0.083,
       "dev_method": "5-fold CV (n=327)",
@@ -41,6 +44,9 @@
       "unsafe_recall": 0.843,
       "safe_recall": null,
       "auc": 0.919,
+      "test_accuracy": 0.828,
+      "test_unsafe_recall": 0.800,
+      "test_auc": 0.885,
       "train_error": 0.0,
       "dev_error": 0.095,
       "dev_method": "5-fold CV (n=327)",
@@ -54,6 +60,9 @@
       "unsafe_recall": 0.819,
       "safe_recall": null,
       "auc": 0.923,
+      "test_accuracy": 0.862,
+      "test_unsafe_recall": 0.667,
+      "test_auc": 0.907,
       "train_error": 0.0037,
       "dev_error": 0.095,
       "dev_method": "5-fold CV (n=327)",
@@ -67,6 +76,9 @@
       "unsafe_recall": 0.783,
       "safe_recall": null,
       "auc": 0.884,
+      "test_accuracy": 0.828,
+      "test_unsafe_recall": 0.733,
+      "test_auc": 0.864,
       "train_error": 0.0186,
       "dev_error": 0.135,
       "dev_method": "5-fold CV (n=327)",
@@ -141,7 +153,7 @@
   ],
   "error_analysis": {
     "model": "Ensemble (best)",
-    "summary": "Of 83 unsafe images, only ~6 score below 0.5 confidence. The biggest, cheapest win is fixing mislabelled images (~11-13), NOT more modelling \u2014 AUC plateaued at ~0.93 across 6+ architectures, the signature of a data ceiling.",
+    "summary": "The 6-reviewer audit (misclassified_6sheets.xlsx) found a pool of 83 unique misclassified images across all 9 models; the Ensemble itself errs on only 11 (6 false-positive, 5 false-negative). The recall ceiling is set by ~3 structural cases almost every model fails (IMG_3484 two-door dual-box, IMG_3652 tiny side-door hanger, IMG_3774 distant double-decker dual-box) plus label noise. The biggest, cheapest win is fixing mislabelled images, NOT more modelling \u2014 AUC plateaus at ~0.93 across 6+ recall-improvement techniques (incl. box-crop localization, 0.929\u21920.932), the signature of a data ceiling.",
     "image_base_url": "https://ml-lab-bmiv.onrender.com",
     "categories": [
       {
@@ -224,7 +236,7 @@
   },
   "diagnosis": {
     "verdict": "Variance / data-limited - NOT bias-limited.",
-    "reasoning": "Against the latest paper tables (held-out = 5-fold CV for the deep transfer models, held-out test for the rest), every model shows large variance (+9% to +23%) and near-zero avoidable bias. The deep nets fit training ~0% but generalise at 8-14%; the classical HOG models OVERFIT too (SVM 1.9% train -> 20.7% test) - they do not underfit. Only the from-scratch CNN is balanced (train 7.8% ~= held-out 8.6%). Extra capacity does not help: AUC plateaus at ~0.93 across 6+ architectures - the signature of a data ceiling, not underfitting.",
+    "reasoning": "Against the latest paper tables (held-out = 5-fold CV for the deep transfer models, held-out test for the rest), 8 of 9 models show large variance (+9% to +23%) and near-zero avoidable bias. The deep nets fit training ~0% but generalise at 8-14%; the classical HOG models OVERFIT too (SVM 1.9% train -> 20.7% test) - they do not underfit. Only the from-scratch CNN is balanced (train 7.8% ~= held-out 8.6%). Extra capacity does not help: AUC plateaus at ~0.93 across 6+ recall-improvement techniques (incl. box-crop localization) - the signature of a data ceiling, not underfitting. NOTE: deep-model headline numbers are 5-fold CV over the 327 train+val images (chosen because one test image moves the n=58 score ~6.7%); on the untouched test set the same models are lower - e.g. the Ensemble is 84.5% acc / 66.7% unsafe-recall there vs 91.7% / 80.7% on CV - so treat the CV figures as an optimistic-leaning estimate, not a held-out guarantee.",
     "next_actions": [
       "Fix the ~11-13 mislabelled images (start with IMG_3719 + the 23 LABEL_AUDIT conflicts) - cheapest, highest leverage.",
       "Collect more clear UNSAFE images (only 98 exist) - the main fix for a variance-limited model; targets safety-critical recall.",

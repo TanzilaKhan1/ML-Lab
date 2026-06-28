@@ -36,6 +36,17 @@ class ModelDiagnosis:
     dev_method: str
     test_error: Optional[float]
     val_contaminated: bool = False
+    # Held-out test (n=58) metrics, kept separate from the headline (which is CV
+    # for the deep models). None for models whose headline already IS the test.
+    test_accuracy: Optional[float] = None
+    test_unsafe_recall: Optional[float] = None
+    test_auc: Optional[float] = None
+
+    @property
+    def headline_is_cv(self) -> bool:
+        """True when the headline accuracy/recall/AUC come from CV (train+val),
+        not the untouched test — i.e. an optimistic-leaning estimate."""
+        return "CV" in (self.dev_method or "")
 
     @property
     def held_out_error(self) -> Optional[float]:
@@ -127,6 +138,9 @@ def model_diagnoses(data: dict) -> list[ModelDiagnosis]:
                 dev_method=m.get("dev_method", ""),
                 test_error=m.get("test_error"),
                 val_contaminated=bool(m.get("val_contaminated", False)),
+                test_accuracy=m.get("test_accuracy"),
+                test_unsafe_recall=m.get("test_unsafe_recall"),
+                test_auc=m.get("test_auc"),
             )
         )
     return out
