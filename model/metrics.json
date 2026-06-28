@@ -155,6 +155,20 @@
     "model": "Ensemble (best)",
     "summary": "The 6-reviewer audit (misclassified_6sheets.xlsx) found a pool of 83 unique misclassified images across all 9 models; the Ensemble itself errs on only 11 (6 false-positive, 5 false-negative). The recall ceiling is set by ~3 structural cases almost every model fails (IMG_3484 two-door dual-box, IMG_3652 tiny side-door hanger, IMG_3774 distant double-decker dual-box) plus label noise. The biggest, cheapest win is fixing mislabelled images, NOT more modelling \u2014 AUC plateaus at ~0.93 across 6+ recall-improvement techniques (incl. box-crop localization, 0.929\u21920.932), the signature of a data ceiling.",
     "image_base_url": "https://ml-lab-bmiv.onrender.com",
+    "per_model_counts": {
+      "_note": "Manual 6-reviewer audit (misclassified_6sheets.xlsx): per-model errors on the 83-image union pool, split into false-positive (safe\u2192unsafe) and false-negative (unsafe\u2192safe, the safety-critical misses).",
+      "pool_size": 83,
+      "models": [
+        {"model": "Logistic Regression", "fp": 39, "fn": 13},
+        {"model": "CNN", "fp": 8, "fn": 20},
+        {"model": "SVM (RBF)", "fp": 16, "fn": 9},
+        {"model": "EfficientNet-B0", "fp": 11, "fn": 4},
+        {"model": "ResNet18", "fp": 6, "fn": 6},
+        {"model": "ResNet50", "fp": 7, "fn": 5},
+        {"model": "ConvNeXt-Tiny", "fp": 6, "fn": 5},
+        {"model": "Ensemble (best)", "fp": 6, "fn": 5}
+      ]
+    },
     "categories": [
       {
         "category": "Label noise \u2014 spurious 'unsafe'",
@@ -232,6 +246,18 @@
           }
         ]
       }
+    ]
+  },
+  "auc_progression": {
+    "_note": "5-fold CV ROC-AUC as recall-improvement techniques are stacked (paper Fig. 13 / RESULTS.md §4). AUC never clears the ~0.93 ceiling — the Ng 'plateau' signature that more modelling won't help; the binding constraint is data.",
+    "ceiling": 0.93,
+    "points": [
+      {"label": "ResNet18 (224px)", "auc": 0.90},
+      {"label": "ResNet50 (224px)", "auc": 0.919},
+      {"label": "+ 320px", "auc": 0.919},
+      {"label": "Ensemble (320px)", "auc": 0.929},
+      {"label": "+ Tiling", "auc": 0.926},
+      {"label": "+ Box-crops", "auc": 0.932}
     ]
   },
   "diagnosis": {

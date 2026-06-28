@@ -9,9 +9,17 @@ from __future__ import annotations
 import html as _html
 from typing import Optional
 
+import matplotlib.pyplot as plt
 import streamlit as st
 
+from . import charts
 from ..metrics import ModelDiagnosis, load_metrics, model_diagnoses
+
+
+def _show(fig) -> None:
+    """Render a Matplotlib figure full-width, then free it."""
+    st.pyplot(fig, width="stretch")
+    plt.close(fig)
 
 
 def _pct(x: Optional[float], digits: int = 1) -> str:
@@ -47,6 +55,44 @@ def _render_human_level(hl: dict) -> None:
         st.caption(f"**SOTA / literature:** {hl['sota']}")
     with st.expander("Why isn't human-level error 0%?"):
         st.markdown(hl.get("why_not_zero", "—"))
+
+
+def _render_hlp_ladder(hl: dict, diags: list[ModelDiagnosis], task: dict) -> None:
+    """Error ladder: where each model sits vs the human-level 'desired
+    performance' line (Ng ch. 28). Built live from the metrics."""
+    human = hl.get("error")
+    if human is None:
+        return
+    rows: list[tuple[str, float, str]] = []
+
+    base_acc = task.get("majority_baseline_accuracy")
+    if base_acc is not None:
+        rows.append(("Always-safe baseline", 1 - base_acc, "baseline"))
+
+    classical = [d for d in diags if "classical" in (d.family or "").lower()
+                 and d.test_error is not None]
+    if classical:
+        best = min(classical, key=lambda d: d.test_error)
+        rows.append((f"Best classical — {best.name} (test)", best.test_error, "model"))
+
+    cv_models = [d for d in diags if d.headline_is_cv and d.held_out_error is not None]
+    if cv_models:
+        best = min(cv_models, key=lambda d: d.held_out_error)
+        rows.append((f"Best deep — {best.name} (CV)", best.held_out_error, "model"))
+
+    if hl.get("alt_quick_glance_error") is not None:
+        rows.append(("Quick-glance human", hl["alt_quick_glance_error"], "human"))
+    rows.append(("Careful expert (Bayes proxy)", human, "human"))
+
+    if len(rows) < 2:
+        return
+    st.caption(
+        "**Where the models stand vs human-level.** The dashed green line is the "
+        "*desired performance* (Ng): the careful-expert error we treat as the Bayes "
+        "floor. The best deep model already sits near it — confirming there is little "
+        "*avoidable bias* left to win."
+    )
+    _show(charts.human_level_ladder(rows, human))
 
 
 def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> None:
@@ -102,6 +148,32 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
             "Run `python model/export_metrics.py` where the dataset lives, "
             "commit the refreshed `metrics.json`, and reboot the app. The table fills in automatically."
         )
+        return
+
+    # Dumbbell: train→held-out gap (variance) per model, vs the human line.
+    items = [
+        {"name": d.name, "train": d.train_error, "held": d.held_out_error}
+        for d in diags
+    ]
+    st.markdown("**Read at the full-data point (Ng):** distance from the blue "
+                "train dot to the green human line is *avoidable bias*; the bar to "
+                "the red held-out dot is *variance*. Bars are long and sit to the "
+                "right ⇒ variance dominates.")
+    _show(charts.bias_variance_dumbbell(items, human_error))
+
+    # Learning-curve schematic for the deep models (Ng ch. 29–31).
+    deep_train = [d.train_error for d in diags
+                  if d.headline_is_cv and d.train_error is not None]
+    cv_models = [d for d in diags if d.headline_is_cv and d.held_out_error is not None]
+    if deep_train and cv_models:
+        train_end = sum(deep_train) / len(deep_train)
+        dev_end = min(d.held_out_error for d in cv_models)
+        st.markdown("**The learning-curve view (Ng ch. 29–31).** Curve *shapes* are "
+                    "the high-variance template; the right-edge dots are our measured "
+                    "deep-model train and CV errors. A wide train↔dev gap that closes "
+                    "as data grows is the signature that says *collect more data*, not "
+                    "*build a bigger model*.")
+        _show(charts.learning_curve_schematic(train_end, dev_end, human_error))
 
 
 def _render_performance(diags: list[ModelDiagnosis]) -> None:
@@ -162,6 +234,18 @@ def _render_error_analysis(ea: dict) -> None:
         "grouped by *reason* — a ceiling analysis showing what to fix first."
     )
     st.info(ea.get("summary", ""))
+
+    pmc = ea.get("per_model_counts")
+    if pmc and pmc.get("models"):
+        st.caption(
+            "**Manual audit — false positives vs false negatives.** From the "
+            "6-reviewer sheets: errors on the shared misclassified pool, split by "
+            "type. **False negatives (red)** are the safety-critical misses. The "
+            "Ensemble and ConvNeXt make the fewest errors; the linear/HOG models "
+            "make many more, confirming the deep features help."
+        )
+        _show(charts.error_fp_fn(pmc["models"], pmc.get("pool_size")))
+
     base = (ea.get("image_base_url") or "").rstrip("/")
     for cat in ea.get("categories", []):
         with st.expander(f"{cat.get('category', '?')}  ·  ~{cat.get('count', '?')} images  ·  {cat.get('fixable', '')}"):
@@ -184,6 +268,21 @@ def _render_error_analysis(ea: dict) -> None:
                 st.markdown(_md_table(["Image", "P(unsafe)", "Note"], rows))
                 if base:
                     st.caption(f"Images are hosted in the annotator app: {base}")
+
+
+def _render_auc_plateau(ap: dict) -> None:
+    points = ap.get("points")
+    if not points:
+        return
+    st.markdown("### 📈 Has it plateaued? (the data-ceiling test)")
+    st.caption(
+        "Ng's plateau test: if stacking stronger techniques no longer moves the "
+        "curve, more of the *same kind of effort* won't reach the goal. Across six "
+        "recall-improvement techniques the CV AUC never clears the **~0.93 ceiling** "
+        "— so the binding constraint is **data** (label noise + too few clear unsafe "
+        "images), not model capacity."
+    )
+    _show(charts.auc_plateau(points, ap.get("ceiling", 0.93)))
 
 
 def _render_diagnosis(dg: dict) -> None:
@@ -219,13 +318,16 @@ def render_analysis_page() -> None:
     if task.get("primary_metric_note"):
         st.info(task["primary_metric_note"])
 
+    diags = model_diagnoses(data)
+    human_error = float(data.get("human_level", {}).get("error", 0.04))
+
     st.divider()
     if "human_level" in data:
         _render_human_level(data["human_level"])
+        if diags:
+            _render_hlp_ladder(data["human_level"], diags, task)
         st.divider()
 
-    diags = model_diagnoses(data)
-    human_error = float(data.get("human_level", {}).get("error", 0.04))
     if diags:
         _render_performance(diags)
         st.divider()
@@ -234,6 +336,10 @@ def render_analysis_page() -> None:
 
     if "error_analysis" in data:
         _render_error_analysis(data["error_analysis"])
+        st.divider()
+
+    if "auc_progression" in data:
+        _render_auc_plateau(data["auc_progression"])
         st.divider()
 
     if "diagnosis" in data:
