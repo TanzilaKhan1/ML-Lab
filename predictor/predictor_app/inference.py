@@ -46,6 +46,25 @@ AVAILABLE_MODELS: dict[str, tuple[str, str]] = {
 # torch-style kinds whose label decision uses a tuned P(unsafe) threshold
 _TORCH_KINDS = ("cnn", "resnet", "torch", "ensemble")
 
+# Kinds too heavy to run LIME on a memory-capped host. LIME pushes hundreds of
+# 512x512 perturbations through the model; for these that means large ImageNet
+# backbones (and, for the ensemble, *several* of them, each doubled by TTA) —
+# the sustained load OOM-kills the container ("loads forever" then crashes).
+# The UI disables the heatmap for these. Light kinds (HOG-based sklearn models
+# + the SmallCNN) stay enabled because each forward pass is cheap.
+#   "ensemble" → ResNet50 + ConvNeXt-Tiny, ×2 TTA each
+#   "torch"    → resnet50 / convnext_tiny / efficientnet_b0 (large backbones)
+_LIME_UNSUPPORTED_KINDS = ("ensemble", "torch")
+
+
+def lime_supported(model_name: str) -> bool:
+    """False for models whose LIME cost would crash a memory-capped host."""
+    spec = AVAILABLE_MODELS.get(model_name)
+    if spec is None:
+        return False
+    _, kind = spec
+    return kind not in _LIME_UNSUPPORTED_KINDS
+
 
 @dataclass
 class Prediction:
@@ -54,6 +73,7 @@ class Prediction:
     class_name: str
     meaning: str
     probabilities: Optional[dict[str, float]]
+    threshold: Optional[float] = None  # tuned P(unsafe) cut-off; None means argmax (0.5)
 
 
 def list_models() -> dict[str, Path]:
@@ -141,12 +161,14 @@ def predict(image: ImageInput, model_name: str = "Logistic Regression") -> Predi
     model = load_model(model_name)
     _, kind = AVAILABLE_MODELS[model_name]
 
+    threshold: Optional[float] = None
     if kind in _TORCH_KINDS:
         pil = _image_to_pil(image)
         probs_arr = model.predict_proba(pil)[0]
         # label uses the model's tuned P(unsafe) threshold, not a plain argmax
         pred = int(model.predict(pil)[0])
         probs = {CLASS_NAMES[i]: float(probs_arr[i]) for i in range(len(CLASS_NAMES))}
+        threshold = getattr(model, "threshold", None)
     else:
         features = preprocess_for_model(image)
         pred = int(model.predict(features)[0])
@@ -168,4 +190,5 @@ def predict(image: ImageInput, model_name: str = "Logistic Regression") -> Predi
         class_name=CLASS_NAMES[pred],
         meaning=LABEL_MEANING[pred],
         probabilities=probs,
+        threshold=threshold,
     )

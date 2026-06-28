@@ -14,7 +14,7 @@ import streamlit as st
 
 from ..config import LIME_DEFAULTS, PALETTE
 from ..explain import LimeExplanation
-from ..inference import CLASS_NAMES, UNSAFE_LABEL, Prediction
+from ..inference import CLASS_NAMES, UNSAFE_LABEL, Prediction, lime_supported
 
 
 # ---------------------------------------------------------------------------
@@ -43,11 +43,21 @@ def render_sidebar(model_choices: dict[str, "object"]) -> SidebarSettings:
 
         st.markdown("---")
         st.markdown("### Explanation")
+        supports_lime = lime_supported(model_name)
         show_lime = st.toggle(
             "LIME region heatmap",
-            value=True,
+            value=supports_lime,
+            disabled=not supports_lime,
             help="Highlight which image regions drove the prediction.",
         )
+        if not supports_lime:
+            st.caption(
+                "⚠️ LIME is disabled for this model. It runs hundreds of forward "
+                "passes through a heavy network (the Ensemble runs several, each "
+                "doubled by test-time augmentation), which exhausts memory and "
+                "crashes the app. Switch to **CNN**, **SVM**, **Logistic "
+                "Regression**, or **Naive Bayes** to see the heatmap."
+            )
         num_samples = st.slider(
             "Perturbation samples",
             min_value=LIME_DEFAULTS.num_samples_min,
@@ -149,6 +159,12 @@ def render_prediction_card(result: Prediction) -> None:
                 for name in CLASS_NAMES
             )
             st.markdown(rows, unsafe_allow_html=True)
+            if result.threshold is not None and result.threshold != 0.5:
+                st.caption(
+                    f"Decision threshold: **P(UNSAFE) ≥ {result.threshold * 100:.1f}%** "
+                    f"(high-recall safety mode — not 50%). "
+                    f"A lower threshold catches more unsafe cases at the cost of more false alarms."
+                )
 
 
 # ---------------------------------------------------------------------------
