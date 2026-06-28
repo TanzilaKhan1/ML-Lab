@@ -170,6 +170,40 @@ _CSS = f"""
     padding: 8px 14px;
   }}
 
+  /* ----- analysis data tables (grouped sub-column headers) ----- */
+  .pp-table-wrap {{
+    overflow-x: auto;
+    margin: 4px 0 6px 0;
+    border: 1px solid {PALETTE.border};
+    border-radius: 12px;
+  }}
+  .pp-table {{
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+    color: {PALETTE.text};
+  }}
+  .pp-table th, .pp-table td {{
+    padding: 9px 14px;
+    border-bottom: 1px solid {PALETTE.border};
+    white-space: nowrap;
+  }}
+  .pp-table thead th {{ background: {PALETTE.surface_muted}; font-weight: 600; }}
+  .pp-table thead tr.grp th {{ text-align: center; color: {PALETTE.text}; }}
+  .pp-table thead tr.sub th {{
+    text-align: right;
+    font-weight: 500;
+    color: {PALETTE.text_muted};
+    font-size: 0.8rem;
+  }}
+  .pp-table th.lft, .pp-table td.lft, .pp-table td.model {{ text-align: left; }}
+  .pp-table td.model {{ font-weight: 600; }}
+  .pp-table td.num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  .pp-table .grpsep {{ border-left: 1px solid {PALETTE.border}; }}
+  .pp-table tbody tr:last-child td {{ border-bottom: none; }}
+  .pp-table tbody tr:hover td {{ background: {PALETTE.surface_muted}; }}
+  .pp-legend {{ font-size: 0.92rem; color: {PALETTE.text}; margin: 0 0 8px 0; }}
+
   /* ----- caption color ----- */
   [data-testid="stCaptionContainer"] {{ color: {PALETTE.text_muted}; }}
 

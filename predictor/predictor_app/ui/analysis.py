@@ -6,6 +6,7 @@ latest committed metrics after a reboot. No numbers are hard-coded in this file.
 """
 from __future__ import annotations
 
+import html as _html
 from typing import Optional
 
 import streamlit as st
@@ -22,6 +23,10 @@ def _signed_pct(x: Optional[float]) -> str:
         return "—"
     sign = "+" if x >= 0 else "−"
     return f"{sign}{abs(x) * 100:.1f}%"
+
+
+def _auc(x: Optional[float]) -> str:
+    return "—" if x is None else f"{x:.3f}"
 
 
 def _md_table(headers: list[str], rows: list[list[str]]) -> str:
@@ -46,28 +51,51 @@ def _render_human_level(hl: dict) -> None:
 
 def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> None:
     st.markdown("### 📉 Avoidable Bias & Variance (per model)")
-    st.caption(
-        f"**Avoidable bias** = train − human ({_pct(human_error)}), large ⇒ underfitting.  "
-        "**Variance** = held-out − train, large ⇒ overfitting / needs data.  \n"
-        "Held-out = **5-fold CV** for the deep transfer models (n=327, used because the "
-        "n=58 test is noisy — one image ≈ 6.7%) and **held-out test** (n=58) for the rest. "
-        "Note: CV is computed on the train+val images, so the deep-model variance here is a "
-        "lower bound; the **Test** column is the untouched-holdout cross-check."
+    st.markdown(
+        '<p class="pp-legend"><b>All values are error rates (1 − accuracy) — '
+        "lower is better.</b> <b>Avoidable bias</b> = train − human error "
+        f"({_pct(human_error)}); a large value ⇒ underfitting. <b>Variance</b> = "
+        "held-out − train; a large value ⇒ overfitting / needs more data.</p>",
+        unsafe_allow_html=True,
     )
-    headers = ["Model", "Train", "Held-out", "Test", "Avoid. bias", "Variance", "Diagnosis"]
+    st.caption(
+        "Held-out error = **CV (n=327)** for the deep transfer models (the n=58 test is "
+        "noisy — one image ≈ 6.7%) and the **Test (n=58)** error for the rest, so variance "
+        "is computed from the CV column where present and the Test column otherwise. CV is "
+        "measured on the train+val images, so the deep-model variance here is a lower bound; "
+        "the Test column is the untouched-hold-out cross-check."
+    )
+
     rows = []
     for d in diags:
-        basis = "CV" if "CV" in d.held_out_label else "test"
-        rows.append([
-            f"**{d.name}**",
-            _pct(d.train_error),
-            f"{_pct(d.held_out_error)} ({basis})",
-            _pct(d.test_error),
-            _signed_pct(d.avoidable_bias),
-            _signed_pct(d.variance),
-            d.regime,
-        ])
-    st.markdown(_md_table(headers, rows))
+        cv_err = _pct(d.dev_error) if d.headline_is_cv else "—"
+        rows.append(
+            f'<tr><td class="model">{_html.escape(d.name)}</td>'
+            f'<td class="num grpsep">{_pct(d.train_error)}</td>'
+            f'<td class="num">{cv_err}</td>'
+            f'<td class="num">{_pct(d.test_error)}</td>'
+            f'<td class="num grpsep">{_signed_pct(d.avoidable_bias)}</td>'
+            f'<td class="num">{_signed_pct(d.variance)}</td>'
+            f'<td class="lft grpsep">{_html.escape(d.regime)}</td></tr>'
+        )
+
+    table = (
+        '<div class="pp-table-wrap"><table class="pp-table"><thead>'
+        '<tr class="grp">'
+        '<th class="lft" rowspan="2">Model</th>'
+        '<th class="grpsep" colspan="3">Error rate (lower is better)</th>'
+        '<th class="grpsep" colspan="2">Decomposition</th>'
+        '<th class="lft grpsep" rowspan="2">Diagnosis</th>'
+        '</tr>'
+        '<tr class="sub">'
+        '<th class="grpsep">Train</th><th>CV (n=327)</th><th>Test (n=58)</th>'
+        '<th class="grpsep">Avoidable bias</th><th>Variance</th>'
+        '</tr></thead><tbody>'
+        + "".join(rows)
+        + "</tbody></table></div>"
+    )
+    st.markdown(table, unsafe_allow_html=True)
+
     if all(d.train_error is None for d in diags):
         st.warning(
             "**Train error not measured yet** — avoidable bias & variance can't be computed. "
@@ -78,39 +106,53 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
 
 def _render_performance(diags: list[ModelDiagnosis]) -> None:
     st.markdown("### 📊 Model performance")
+    st.markdown(
+        '<p class="pp-legend"><b>All values are scores — higher is better.</b> '
+        "Accuracy and unsafe-class recall are percentages; AUC is the 0–1 ROC area. "
+        "For this 2.9:1-imbalanced safety task, <b>unsafe-recall</b> matters most.</p>",
+        unsafe_allow_html=True,
+    )
     st.caption(
-        "For this 2.9:1-imbalanced safety task, **unsafe-recall** matters most. "
-        "Deep-model headline numbers are **5-fold CV over the 327 train+val images** "
-        "(used because one image moves the noisy n=58 test score ~6.7%); the rest are "
-        "**held-out test (n=58)**. CV is measured on data the models were selected on, so "
-        "it is optimistic-leaning — the untouched-test value is shown after `·` for the "
-        "deep models so both are visible."
+        "**CV (n=327)** = 5-fold cross-validation over the train+val images — the "
+        "deep-model headline, used because one image moves the small n=58 test score "
+        "~6.7%. Because CV is measured on data the models were selected on, it is "
+        "optimistic-leaning. **Test (n=58)** = the untouched hold-out — the honest "
+        "cross-check. Models without a CV run show “—” in that column."
     )
 
-    def _cell(cv_val: Optional[float], test_val: Optional[float], is_cv: bool,
-              fmt=_pct) -> str:
-        """Headline value, plus the untouched-test value after `·` when the
-        headline is CV and a test value exists."""
-        head = fmt(cv_val)
-        if is_cv and test_val is not None:
-            return f"{head} · {fmt(test_val)} test"
-        return head
-
-    def _auc_fmt(x: Optional[float]) -> str:
-        return "—" if x is None else f"{x:.3f}"
-
-    headers = ["Model", "Family", "Accuracy", "Unsafe-recall", "AUC", "Dev estimate"]
     rows = []
     for d in diags:
         is_cv = d.headline_is_cv
-        rows.append([
-            f"**{d.name}**", d.family,
-            _cell(d.accuracy, d.test_accuracy, is_cv),
-            _cell(d.unsafe_recall, d.test_unsafe_recall, is_cv),
-            _cell(d.auc, d.test_auc, is_cv, fmt=_auc_fmt),
-            d.dev_method or "—",
-        ])
-    st.markdown(_md_table(headers, rows))
+        acc_cv = _pct(d.accuracy) if is_cv else "—"
+        acc_t = _pct(d.test_accuracy) if is_cv else _pct(d.accuracy)
+        rec_cv = _pct(d.unsafe_recall) if is_cv else "—"
+        rec_t = _pct(d.test_unsafe_recall) if is_cv else _pct(d.unsafe_recall)
+        auc_cv = _auc(d.auc) if is_cv else "—"
+        auc_t = _auc(d.test_auc) if is_cv else _auc(d.auc)
+        rows.append(
+            f'<tr><td class="model">{_html.escape(d.name)}</td>'
+            f'<td class="num grpsep">{acc_cv}</td><td class="num">{acc_t}</td>'
+            f'<td class="num grpsep">{rec_cv}</td><td class="num">{rec_t}</td>'
+            f'<td class="num grpsep">{auc_cv}</td><td class="num">{auc_t}</td></tr>'
+        )
+
+    table = (
+        '<div class="pp-table-wrap"><table class="pp-table"><thead>'
+        '<tr class="grp">'
+        '<th class="lft" rowspan="2">Model</th>'
+        '<th class="grpsep" colspan="2">Accuracy</th>'
+        '<th class="grpsep" colspan="2">Unsafe-recall</th>'
+        '<th class="grpsep" colspan="2">AUC</th>'
+        '</tr>'
+        '<tr class="sub">'
+        '<th class="grpsep">CV (n=327)</th><th>Test (n=58)</th>'
+        '<th class="grpsep">CV (n=327)</th><th>Test (n=58)</th>'
+        '<th class="grpsep">CV (n=327)</th><th>Test (n=58)</th>'
+        '</tr></thead><tbody>'
+        + "".join(rows)
+        + "</tbody></table></div>"
+    )
+    st.markdown(table, unsafe_allow_html=True)
 
 
 def _render_error_analysis(ea: dict) -> None:
