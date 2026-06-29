@@ -37,6 +37,7 @@ import {
   MoreVertical,
   FolderInput,
   PanelRight,
+  Pencil,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -255,6 +256,9 @@ export default function AnnotatorPage() {
   const [pendingLabelDelete, setPendingLabelDelete] = useState<{ name: string; count: number } | null>(null);
   const [imageDimState, setImageDimState] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(false);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
+  const [renameNewName, setRenameNewName] = useState("");
 
   const undoStack = useRef<Snapshot[]>([]);
   const redoStack = useRef<Snapshot[]>([]);
@@ -1840,6 +1844,29 @@ export default function AnnotatorPage() {
     }
   }, [cancelInFlightForFilename, fetchImages, fetchStats]);
 
+  const renameImageRequest = useCallback(async (filename: string, newBasename: string) => {
+    const wasCurrentImage = currentImageRef.current === filename;
+    cancelInFlightForFilename(filename);
+    const tId = toast.loading("Renaming…");
+    try {
+      const res = await fetch("/api/images/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, newBasename }),
+      });
+      const data = await safeReadJson(res);
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const newFilename = data.filename as string;
+      toast.success("Renamed", { id: tId, description: newFilename });
+      await fetchImages();
+      await fetchStats();
+      if (wasCurrentImage) loadImage(newFilename);
+    } catch (err) {
+      toast.error("Rename failed", { id: tId, description: String(err instanceof Error ? err.message : err) });
+      fetchImages(); fetchStats();
+    }
+  }, [cancelInFlightForFilename, fetchImages, fetchStats, loadImage]);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === " " && !spaceHeld.current && !isEditingField(e.target) && !anyModalOpen()) {
@@ -2153,6 +2180,18 @@ export default function AnnotatorPage() {
                             <span className="font-mono">{f}</span>
                           </DropdownMenuItem>
                         ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setRenameTarget(img.filename);
+                            setRenameNewName(img.filename.split("/").pop() || "");
+                            setShowRenameDialog(true);
+                          }}
+                          className="text-xs"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Rename
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onSelect={() => deleteImageRequest(img.filename)}
@@ -2540,6 +2579,55 @@ export default function AnnotatorPage() {
             <Button variant="ghost" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
             <Button variant="destructive" onClick={doClearAll}>
               <Trash2 /> Yes, delete everything
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename image dialog */}
+      <Dialog
+        open={showRenameDialog}
+        onOpenChange={(open) => { setShowRenameDialog(open); if (!open) setRenameTarget(null); }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Rename image</DialogTitle>
+            <DialogDescription>
+              Enter a new filename for{" "}
+              <span className="font-mono text-foreground">{renameTarget?.split("/").pop()}</span>.
+              The folder path will stay the same.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={renameNewName}
+              onChange={(e) => setRenameNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameTarget && renameNewName.trim() && renameNewName.trim() !== renameTarget.split("/").pop()) {
+                  setShowRenameDialog(false);
+                  renameImageRequest(renameTarget, renameNewName.trim());
+                  setRenameTarget(null);
+                }
+              }}
+              placeholder="new-filename.jpg"
+              className="text-sm font-mono"
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => { setShowRenameDialog(false); setRenameTarget(null); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!renameTarget || !renameNewName.trim()) return;
+                setShowRenameDialog(false);
+                renameImageRequest(renameTarget, renameNewName.trim());
+                setRenameTarget(null);
+              }}
+              disabled={!renameNewName.trim() || renameNewName.trim() === renameTarget?.split("/").pop()}
+            >
+              Rename
             </Button>
           </DialogFooter>
         </DialogContent>

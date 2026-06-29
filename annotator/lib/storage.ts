@@ -678,6 +678,70 @@ export async function moveImage(filename: string, destFolder: UploadFolder): Pro
 }
 
 /**
+ * Rename an image in-place (basename only; folder path is preserved).
+ * Also updates the `filename` field inside the paired annotation JSON so
+ * downstream consumers (export, reload) always see the correct path.
+ *
+ * Returns the new filename. Throws InvalidFilenameError, NotFoundError,
+ * AlreadyExistsError, or StorageStepError.
+ */
+export async function renameImage(filename: string, newBasename: string): Promise<string> {
+  validateActiveFilename(filename);
+
+  if (!newBasename || newBasename.includes("/") || newBasename.includes("\\") || newBasename.includes("..")) {
+    throw new InvalidFilenameError(newBasename, "invalid basename");
+  }
+  if (!IMAGE_EXTS.includes(path.extname(newBasename).toLowerCase())) {
+    throw new InvalidFilenameError(newBasename, "must have a valid image extension");
+  }
+
+  const folder = filename.split("/").slice(0, -1).join("/");
+  const newFilename = `${folder}/${newBasename}`;
+
+  if (newFilename === filename) return filename;
+
+  // Reuse the active-filename validator so folder prefix and traversal checks apply.
+  validateActiveFilename(newFilename);
+
+  const srcRaw = rawKey(filename);
+  const dstRaw = rawKey(newFilename);
+  if (await objectExists(dstRaw)) throw new AlreadyExistsError(newFilename);
+  if (!(await objectExists(srcRaw))) throw new NotFoundError(filename);
+
+  await step("rename:copy-raw", { srcRaw, dstRaw }, () => copyObject(srcRaw, dstRaw));
+  try {
+    await step("rename:delete-raw", { srcRaw }, () => deleteObject(srcRaw));
+  } catch (err) {
+    await deleteObject(dstRaw).catch((rbErr) =>
+      console.error("[storage] rename:rollback-dest-raw failed", { dstRaw, rbErr }),
+    );
+    throw err;
+  }
+
+  const srcAnn = annKey(filename);
+  const dstAnn = annKey(newFilename);
+  if (await objectExists(srcAnn)) {
+    // Update the internal filename field so re-loads and exports use the new name.
+    const text = await getObjectText(srcAnn);
+    const data = safeJsonParse<ImageAnnotation>(text);
+    if (data) {
+      data.filename = newFilename;
+      await step("rename:copy-ann", { srcAnn, dstAnn }, () =>
+        putObject(dstAnn, JSON.stringify(data, null, 2), "application/json"),
+      );
+    } else {
+      await step("rename:copy-ann", { srcAnn, dstAnn }, () => copyObject(srcAnn, dstAnn));
+    }
+    await step("rename:delete-ann", { srcAnn }, () => deleteObject(srcAnn));
+  }
+
+  await step("rename:rename-manifest", { filename, newFilename }, () =>
+    renameManifestEntry(filename, newFilename),
+  );
+  return newFilename;
+}
+
+/**
  * Soft-delete an image: move it (and its annotation) under _trash/ so it
  * disappears from the UI but can be recovered out-of-band by an operator.
  *
