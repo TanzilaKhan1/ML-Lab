@@ -46,53 +46,14 @@ def _md_table(headers: list[str], rows: list[list[str]]) -> str:
 
 def _render_human_level(hl: dict) -> None:
     st.markdown("### 🧍 Human-Level Performance (Bayes-error proxy)")
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("Human-level accuracy", _pct(hl.get("accuracy")))
     c2.metric("Human-level error", _pct(hl.get("error")))
-    c3.metric("Quick-glance error", _pct(hl.get("alt_quick_glance_error")))
     st.markdown(f"**Definition:** {hl.get('definition', '—')}")
     if hl.get("sota"):
         st.caption(f"**SOTA / literature:** {hl['sota']}")
     with st.expander("Why isn't human-level error 0%?"):
         st.markdown(hl.get("why_not_zero", "—"))
-
-
-def _render_hlp_ladder(hl: dict, diags: list[ModelDiagnosis], task: dict) -> None:
-    """Error ladder: where each model sits vs the human-level 'desired
-    performance' line (Ng ch. 28). Built live from the metrics."""
-    human = hl.get("error")
-    if human is None:
-        return
-    rows: list[tuple[str, float, str]] = []
-
-    base_acc = task.get("majority_baseline_accuracy")
-    if base_acc is not None:
-        rows.append(("Always-safe baseline", 1 - base_acc, "baseline"))
-
-    classical = [d for d in diags if "classical" in (d.family or "").lower()
-                 and d.test_error is not None]
-    if classical:
-        best = min(classical, key=lambda d: d.test_error)
-        rows.append((f"Best classical — {best.name} (test)", best.test_error, "model"))
-
-    cv_models = [d for d in diags if d.headline_is_cv and d.held_out_error is not None]
-    if cv_models:
-        best = min(cv_models, key=lambda d: d.held_out_error)
-        rows.append((f"Best deep — {best.name} (CV)", best.held_out_error, "model"))
-
-    if hl.get("alt_quick_glance_error") is not None:
-        rows.append(("Quick-glance human", hl["alt_quick_glance_error"], "human"))
-    rows.append(("Careful expert (Bayes proxy)", human, "human"))
-
-    if len(rows) < 2:
-        return
-    st.caption(
-        "**Where the models stand vs human-level.** The dashed green line is the "
-        "*desired performance* (Ng): the careful-expert error we treat as the Bayes "
-        "floor. The best deep model already sits near it — confirming there is little "
-        "*avoidable bias* left to win."
-    )
-    _show(charts.human_level_ladder(rows, human))
 
 
 def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> None:
@@ -324,8 +285,6 @@ def render_analysis_page() -> None:
     st.divider()
     if "human_level" in data:
         _render_human_level(data["human_level"])
-        if diags:
-            _render_hlp_ladder(data["human_level"], diags, task)
         st.divider()
 
     if diags:

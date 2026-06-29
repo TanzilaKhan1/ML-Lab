@@ -4,8 +4,6 @@ Every figure is built from ``metrics.json`` data (passed in by the caller) — n
 numbers are hard-coded here. The charts operationalise the assignment's three
 deliverables and Andrew Ng's *Machine Learning Yearning* ch. 28–31:
 
-  * ``human_level_ladder``        — Human-Level Performance (the "desired
-    performance" line, Ng ch. 28).
   * ``bias_variance_dumbbell``    — avoidable bias & variance read at the
     full-data point (Ng ch. 27–28).
   * ``learning_curve_schematic``  — the high-variance learning-curve template
@@ -55,37 +53,7 @@ def _new(figsize):
 
 
 # ---------------------------------------------------------------------------
-# 1. Human-level performance ladder  (assignment bullet 3 · Ng ch. 28)
-# ---------------------------------------------------------------------------
-def human_level_ladder(rows: list[tuple[str, float, str]], human_error: float):
-    """rows = [(label, error_fraction, kind)]; kind ∈ {human, model, baseline}.
-    Horizontal error bars, ascending, with the human-level line marked."""
-    rows = sorted(rows, key=lambda r: r[1])
-    labels = [r[0] for r in rows]
-    vals = [r[1] * 100 for r in rows]
-    color_by_kind = {"human": _HUMAN, "model": _TRAIN, "baseline": _MUTED}
-    colors = [color_by_kind.get(r[2], _TRAIN) for r in rows]
-
-    fig, ax = _new((6.6, 0.5 * len(rows) + 1.2))
-    y = np.arange(len(rows))
-    ax.barh(y, vals, color=colors, height=0.6, zorder=3)
-    for yi, v in zip(y, vals):
-        ax.text(v + 0.6, yi, f"{v:.1f}%", va="center", ha="left",
-                fontsize=9, color=_TEXT)
-    ax.axvline(human_error * 100, color=_HUMAN, ls="--", lw=1.6, zorder=2)
-    ax.text(human_error * 100, len(rows) - 0.3,
-            f"  human-level (desired) {human_error*100:.0f}%",
-            color=_HUMAN, fontsize=8.5, va="bottom", ha="left")
-    ax.set_yticks(y)
-    ax.set_yticklabels(labels, fontsize=9, color=_TEXT)
-    ax.set_xlabel("error rate  (%, lower is better)", fontsize=9, color=_MUTED)
-    ax.set_xlim(0, max(vals) * 1.18)
-    fig.tight_layout()
-    return fig
-
-
-# ---------------------------------------------------------------------------
-# 2. Bias / variance dumbbell  (assignment bullet 4 · Ng ch. 27–28)
+# 1. Bias / variance dumbbell  (assignment bullet 4 · Ng ch. 27–28)
 # ---------------------------------------------------------------------------
 def bias_variance_dumbbell(items: list[dict], human_error: float):
     """items = [{name, train, held, has_train}] sorted by caller.
