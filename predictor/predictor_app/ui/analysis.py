@@ -122,20 +122,6 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
                 "right ⇒ variance dominates.")
     _show(charts.bias_variance_dumbbell(items, human_error))
 
-    # Learning-curve schematic for the deep models (Ng ch. 29–31).
-    deep_train = [d.train_error for d in diags
-                  if d.headline_is_cv and d.train_error is not None]
-    cv_models = [d for d in diags if d.headline_is_cv and d.held_out_error is not None]
-    if deep_train and cv_models:
-        train_end = sum(deep_train) / len(deep_train)
-        dev_end = min(d.held_out_error for d in cv_models)
-        st.markdown("**The learning-curve view (Ng ch. 29–31).** Curve *shapes* are "
-                    "the high-variance template; the right-edge dots are our measured "
-                    "deep-model train and CV errors. A wide train↔dev gap that closes "
-                    "as data grows is the signature that says *collect more data*, not "
-                    "*build a bigger model*.")
-        _show(charts.learning_curve_schematic(train_end, dev_end, human_error))
-
 
 def _render_performance(diags: list[ModelDiagnosis]) -> None:
     st.markdown("### 📊 Model performance")

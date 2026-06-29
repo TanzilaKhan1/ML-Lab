@@ -6,8 +6,6 @@ deliverables and Andrew Ng's *Machine Learning Yearning* ch. 28–31:
 
   * ``bias_variance_dumbbell``    — avoidable bias & variance read at the
     full-data point (Ng ch. 27–28).
-  * ``learning_curve_schematic``  — the high-variance learning-curve template
-    (Ng ch. 29–31) annotated with our measured endpoints.
   * ``auc_plateau``               — AUC vs. stacked techniques: the "plateau"
     test (Ng ch. 28) → data ceiling.
   * ``error_fp_fn``               — manual 6-reviewer error audit, FP vs FN.
@@ -101,53 +99,7 @@ def bias_variance_dumbbell(items: list[dict], human_error: float):
 
 
 # ---------------------------------------------------------------------------
-# 3. Learning-curve schematic  (Ng ch. 29–31, high-variance template)
-# ---------------------------------------------------------------------------
-def learning_curve_schematic(train_end: float, dev_end: float, human_error: float):
-    """High-variance learning-curve TEMPLATE (Ng): curve shapes are illustrative,
-    the right-edge endpoints are our measured train/dev errors."""
-    fig, ax = _new((6.6, 4.0))
-    m = np.linspace(0.04, 1.0, 200)
-
-    # dev error: starts high, decays toward the measured endpoint (plateaus above human)
-    dev = dev_end + (0.34 - dev_end) * np.exp(-3.6 * m)
-    # training error: rises from ~0 toward the measured endpoint
-    train = train_end * (1 - np.exp(-5.0 * m))
-
-    ax.plot(m, dev * 100, color=_HELD, lw=2.2, label="dev / held-out error")
-    ax.plot(m, train * 100, color=_TRAIN, lw=2.2, label="training error")
-    ax.axhline(human_error * 100, color=_HUMAN, ls="--", lw=1.6,
-               label="desired performance (human-level)")
-
-    # shade the train↔dev gap at the right edge = variance
-    ax.fill_between(m, train * 100, dev * 100, color=_HELD, alpha=0.06, zorder=0)
-
-    # endpoint annotations
-    ax.scatter([1.0], [dev_end * 100], color=_HELD, s=40, zorder=5)
-    ax.scatter([1.0], [train_end * 100], color=_TRAIN, s=40, zorder=5)
-    ax.annotate(f"dev ≈ {dev_end*100:.1f}%", (1.0, dev_end * 100),
-                xytext=(-6, 8), textcoords="offset points", ha="right",
-                fontsize=8.5, color=_HELD)
-    ax.annotate(f"train ≈ {train_end*100:.0f}–2%", (1.0, train_end * 100),
-                xytext=(-6, -12), textcoords="offset points", ha="right",
-                fontsize=8.5, color=_TRAIN)
-    # variance bracket label
-    mid = dev_end * 100 - (dev_end * 100 - train_end * 100) / 2
-    ax.annotate("large gap\n= high variance\n⇒ more data helps",
-                (0.62, 0.5 * (dev[120] + train[120]) * 100),
-                fontsize=8.5, color=_MUTED, ha="center", va="center")
-
-    ax.set_xlabel("training-set size  →", fontsize=9, color=_MUTED)
-    ax.set_ylabel("error  (%)", fontsize=9, color=_MUTED)
-    ax.set_xticks([])
-    ax.set_ylim(0, 36)
-    ax.legend(loc="upper right", fontsize=8, frameon=False)
-    fig.tight_layout()
-    return fig
-
-
-# ---------------------------------------------------------------------------
-# 4. AUC plateau across techniques  (Ng ch. 28 "has it plateaued?")
+# 3. AUC plateau across techniques  (Ng ch. 28 "has it plateaued?")
 # ---------------------------------------------------------------------------
 def auc_plateau(points: list[dict], ceiling: float):
     """points = [{label, auc}] in stacking order; horizontal ceiling line."""
