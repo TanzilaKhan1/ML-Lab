@@ -10,7 +10,7 @@ predictor/images
 predictor/predictor_app/__pycache__
 predictor/predictor_app/ui/__pycache__
 
-images
+/images
 
 predictor/model/__pycache__
 # --- added: exclude envs, caches, derived data, training artifacts ---
