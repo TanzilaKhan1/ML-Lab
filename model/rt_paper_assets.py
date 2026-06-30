@@ -37,15 +37,15 @@ MET = du.ROOT / "outputs_final" / "metrics_full.json"
 NPZ = du.ROOT / "outputs_final" / "probs_cache.npz"
 LABELS = REPO.parent / "data" / "label_map.json"
 
-# ───────────────────────── warm theme ─────────────────────────
-CREAM   = "#FBF3E7"   # warm paper background
-PANEL   = "#FFFDF9"
-INK     = "#3B2A20"   # dark warm brown (text)
-SUBINK  = "#6F5844"
-GRIDC   = "#E7D6C2"
-SAFE_C  = "#E9B949"   # warm gold
-UNSAFE_C= "#B3320B"   # warm rust
-ACCENT  = "#7B1E1E"   # deep maroon (ensemble / highlight)
+# ───────────────────────── clean paper theme (white bg, muted palette) ───────
+CREAM   = "#FFFFFF"   # white background
+PANEL   = "#FFFFFF"
+INK     = "#1A1A1A"   # near-black text
+SUBINK  = "#555555"
+GRIDC   = "#E8E8E8"
+SAFE_C  = "#4C72B0"   # calm blue
+UNSAFE_C= "#C44E52"   # muted red
+ACCENT  = "#2F4B7C"   # deep navy (ensemble / highlight)
 
 ORDER = ["Ensemble (best)", "ResNet50", "ConvNeXt-Tiny", "EfficientNet-B0",
          "ResNet18", "CNN", "SVM (RBF)", "Logistic Regression", "Naive Bayes"]
@@ -55,16 +55,17 @@ SHORT = {"Ensemble (best)": "Ensemble", "ResNet50": "ResNet50", "ConvNeXt-Tiny":
 KEY = {"Ensemble (best)": "ensemble", "ResNet50": "resnet50", "ConvNeXt-Tiny": "convnext",
        "EfficientNet-B0": "efficientnet", "ResNet18": "resnet18", "CNN": "cnn",
        "SVM (RBF)": "svm", "Logistic Regression": "logreg", "Naive Bayes": "nb"}
-COLOR = {"Ensemble (best)": ACCENT, "ResNet50": "#C1121F", "ConvNeXt-Tiny": "#E85D04",
-         "EfficientNet-B0": "#F48C06", "ResNet18": "#DC2F02", "CNN": "#FAA307",
-         "SVM (RBF)": "#BC6C25", "Logistic Regression": "#9C6644", "Naive Bayes": "#C9A227"}
-WARM = LinearSegmentedColormap.from_list("warm", ["#FFF7EC", "#FBC78A", "#E8722C", "#B3320B", "#6A040F"])
+COLOR = {"Ensemble (best)": "#2F4B7C", "ResNet50": "#4C72B0", "ConvNeXt-Tiny": "#55A868",
+         "EfficientNet-B0": "#8172B3", "ResNet18": "#DD8452", "CNN": "#64B5CD",
+         "SVM (RBF)": "#C44E52", "Logistic Regression": "#937860", "Naive Bayes": "#8C8C8C"}
+# clean white→blue sequential for confusion / heatmap (replaces the warm map)
+WARM = LinearSegmentedColormap.from_list("paperblue", ["#FFFFFF", "#C6DBEF", "#6BAED6", "#2171B5", "#08306B"])
 
 plt.rcParams.update({
     "figure.facecolor": CREAM, "savefig.facecolor": CREAM, "axes.facecolor": PANEL,
     "figure.dpi": 150, "savefig.dpi": 200, "savefig.bbox": "tight",
     "font.family": "DejaVu Sans", "font.size": 11.5,
-    "text.color": INK, "axes.labelcolor": INK, "axes.edgecolor": "#D9C3A8",
+    "text.color": INK, "axes.labelcolor": INK, "axes.edgecolor": "#BBBBBB",
     "xtick.color": SUBINK, "ytick.color": SUBINK,
     "axes.titlesize": 14, "axes.titleweight": "bold", "axes.titlepad": 12,
     "axes.grid": True, "grid.color": GRIDC, "grid.linewidth": 0.9, "grid.alpha": 0.9,
@@ -78,9 +79,9 @@ def despine(ax):
 
 
 def suptitle(fig, title, sub=None):
-    fig.suptitle(title, fontsize=17, fontweight="bold", color=INK, y=1.005)
+    fig.suptitle(title, fontsize=16, fontweight="bold", color=INK, y=0.985)
     if sub:
-        fig.text(0.5, 0.96, sub, ha="center", fontsize=10.5, color=SUBINK)
+        fig.text(0.5, 0.94, sub, ha="center", fontsize=10.5, color=SUBINK)
 
 
 # ───────────────────────── load data ─────────────────────────
@@ -107,8 +108,8 @@ def fig_dataset():
     veh = Counter((r["vehicle"], r["label"]) for r in recs)
     sc = D["split_counts"]
 
-    fig, ax = plt.subplots(2, 2, figsize=(13, 9.6))
-    fig.subplots_adjust(hspace=0.42, wspace=0.28)
+    fig, ax = plt.subplots(2, 2, figsize=(13, 9.8))
+    fig.subplots_adjust(hspace=0.42, wspace=0.28, top=0.87)
 
     # (a) donut safe/unsafe
     a = ax[0, 0]
@@ -153,7 +154,7 @@ def fig_dataset():
     d = ax[1, 1]
     labels = ["originals", "+ augmented"]
     vals = [D["train_originals"], D["train_total"]]
-    bars = d.bar(labels, vals, color=["#D9A157", ACCENT], width=0.55)
+    bars = d.bar(labels, vals, color=["#A6BDDB", ACCENT], width=0.55)
     for r, v in zip(bars, vals):
         d.text(r.get_x() + r.get_width()/2, v + 25, f"{v}", ha="center", fontweight="bold", color=INK)
     d.annotate(f"×{D['train_total']/max(D['train_originals'],1):.1f}",
@@ -200,7 +201,7 @@ def fig_roc():
         lw = 3.0 if m == "Ensemble (best)" else 1.7
         ax.plot(fpr, tpr, color=COLOR[m], lw=lw, label=f"{SHORT[m]}  ({auc:.3f})",
                 zorder=5 if m == "Ensemble (best)" else 3)
-    ax.plot([0, 1], [0, 1], "--", color="#B9A88F", lw=1)
+    ax.plot([0, 1], [0, 1], "--", color="#999999", lw=1)
     ax.set_xlabel("False positive rate"); ax.set_ylabel("True positive rate (unsafe)")
     despine(ax)
     ax.legend(title="model (AUC)", fontsize=9.5, loc="lower right")
@@ -218,7 +219,7 @@ def fig_pr():
         lw = 3.0 if m == "Ensemble (best)" else 1.7
         ax.plot(rc, pr, color=COLOR[m], lw=lw, label=f"{SHORT[m]}  ({ap:.3f})",
                 zorder=5 if m == "Ensemble (best)" else 3)
-    ax.axhline(base, ls="--", color="#B9A88F", lw=1, label=f"baseline ({base:.2f})")
+    ax.axhline(base, ls="--", color="#999999", lw=1, label=f"baseline ({base:.2f})")
     ax.set_xlabel("Recall (unsafe)"); ax.set_ylabel("Precision (unsafe)")
     despine(ax)
     ax.legend(title="model (AP)", fontsize=9.5, loc="lower left")
@@ -244,7 +245,7 @@ def fig_confusions():
         ax.set_xlabel("predicted", fontsize=8.5); ax.set_ylabel("true", fontsize=8.5)
         ax.grid(False)
     suptitle(fig, "Confusion Matrices — TEST", f"balanced operating point, n = {TEST_N}")
-    fig.tight_layout(rect=[0, 0, 1, 0.95]); fig.savefig(FIG / "fig05_confusion_matrices.png"); plt.close(fig)
+    fig.tight_layout(rect=[0, 0, 1, 0.90]); fig.savefig(FIG / "fig05_confusion_matrices.png"); plt.close(fig)
     print("  fig05_confusion_matrices")
 
 
@@ -255,20 +256,22 @@ def fig_tradeoff():
     acc = [( (p >= t).astype(int) == y).mean() for t in ts]
     rec = [ ((p >= t).astype(int)[y == 1] == 1).mean() for t in ts]
     thr = MODELS[m]["operating_thresholds"]
-    fig, ax = plt.subplots(figsize=(9.2, 6.6))
-    ax.plot(ts, acc, color="#BC6C25", lw=2.6, label="accuracy")
-    ax.plot(ts, rec, color=ACCENT, lw=2.6, label="unsafe recall")
-    marks = [("balanced", thr["threshold_balanced"], "#1B5E20"),
-             ("high_recall", thr["threshold_high_recall"], "#E85D04"),
-             ("max_recall", thr["threshold_max_recall"], "#7B1E1E")]
-    for name, t, c in marks:
-        ax.axvline(t, color=c, ls=":", lw=1.6)
-        ax.scatter([t], [((p >= t).astype(int)[y == 1] == 1).mean()], color=c, s=90, zorder=6,
-                   edgecolor="white", linewidth=1.3)
-        ax.text(t, 1.02, name, rotation=90, va="bottom", ha="center", fontsize=8.7, color=c, fontweight="bold")
+    fig, ax = plt.subplots(figsize=(9.2, 6.2))
+    ax.plot(ts, acc, color="#4C72B0", lw=2.4, label="accuracy")
+    ax.plot(ts, rec, color="#C44E52", lw=2.4, label="unsafe recall")
+    # mark the 3 operating points as legend markers (no overlapping vertical text)
+    marks = [("balanced", thr["threshold_balanced"], "#2F4B7C", "o"),
+             ("high-recall (deployed)", thr["threshold_high_recall"], "#55A868", "s"),
+             ("max-recall (zero-miss)", thr["threshold_max_recall"], "#8172B3", "^")]
+    for name, t, c, mk in marks:
+        ax.axvline(t, color=c, ls=":", lw=1.2, alpha=0.7)
+        ry = ((p >= t).astype(int)[y == 1] == 1).mean()
+        ax.scatter([t], [ry], color=c, s=120, marker=mk, zorder=6, edgecolor="white",
+                   linewidth=1.2, label=f"{name}  (t = {t:.2f})")
     ax.set_xlabel("decision threshold  P(unsafe)"); ax.set_ylabel("score")
-    ax.set_ylim(0, 1.10); despine(ax)
-    ax.legend(loc="lower center")
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1.05); despine(ax)
+    ax.legend(loc="lower center", fontsize=9.5, frameon=True, framealpha=0.95,
+              edgecolor="#DDDDDD", ncol=1)
     suptitle(fig, "Operating-Point Trade-off", f"held-out test, n = {TEST_N}  ·  three deployable modes")
     fig.tight_layout(rect=[0, 0, 1, 0.90]); fig.savefig(FIG / "fig06_tradeoff.png"); plt.close(fig)
     print("  fig06_tradeoff")
@@ -280,8 +283,8 @@ def fig_errors():
     err = {sp: [1 - bal(m, sp)["accuracy"] for m in names] for sp in ("train", "val", "test")}
     x = np.arange(len(names)); w = 0.26
     fig, ax = plt.subplots(figsize=(15, 7))
-    ax.bar(x - w, err["train"], w, label="train error", color="#E9C46A")
-    ax.bar(x,     err["val"],   w, label="val error",   color="#E07A3E")
+    ax.bar(x - w, err["train"], w, label="train error", color="#A6BDDB")
+    ax.bar(x,     err["val"],   w, label="val error",   color="#6BAED6")
     ax.bar(x + w, err["test"],  w, label="test error",  color=ACCENT)
     for i in range(len(names)):
         for off, sp in [(-w, "train"), (0, "val"), (w, "test")]:
@@ -303,8 +306,8 @@ def fig_gap():
     y = np.arange(len(names))
     fig, ax = plt.subplots(figsize=(10.5, 7))
     for i in range(len(names)):
-        ax.plot([te[i], tr[i]], [i, i], color="#D9C3A8", lw=3, zorder=1)
-    ax.scatter(tr, y, s=90, color="#E9C46A", label="train acc", zorder=3, edgecolor=INK, linewidth=0.6)
+        ax.plot([te[i], tr[i]], [i, i], color="#CCCCCC", lw=3, zorder=1)
+    ax.scatter(tr, y, s=90, color="#A6BDDB", label="train acc", zorder=3, edgecolor=INK, linewidth=0.6)
     ax.scatter(te, y, s=110, color=ACCENT, label="test acc", zorder=3, edgecolor="white", linewidth=0.8)
     for i in range(len(names)):
         ax.text((tr[i]+te[i])/2, i + 0.18, f"Δ{(tr[i]-te[i])*100:.0f}", ha="center", fontsize=8.4,
@@ -355,7 +358,7 @@ def fig_table():
     for i, m in enumerate(ORDER, start=1):
         tbl[i, 0].set_facecolor(COLOR[m]); tbl[i, 0].set_text_props(color="white", fontweight="bold")
         for j in range(1, len(cols)):
-            tbl[i, j].set_facecolor("#FFFDF9" if i % 2 else "#F7ECDD")
+            tbl[i, j].set_facecolor("#FFFFFF" if i % 2 else "#F0F3F8")
     ax.set_title("Model comparison — held-out test, balanced operating point",
                  fontweight="bold", fontsize=13, pad=16, color=INK)
     fig.savefig(FIG / "fig10_results_table.png", dpi=200); plt.close(fig)
@@ -368,7 +371,7 @@ def fig_modes():
     keys = [("accuracy", "Accuracy"), ("recall_unsafe", "Unsafe recall"),
             ("precision_unsafe", "Precision"), ("specificity", "Specificity")]
     x = np.arange(len(modes)); w = 0.2
-    cols = ["#BC6C25", ACCENT, "#E85D04", "#C9A227"]
+    cols = ["#4C72B0", "#55A868", "#DD8452", "#8172B3"]
     fig, ax = plt.subplots(figsize=(10, 6.4))
     for i, (k, lab) in enumerate(keys):
         vals = [MODELS[m]["test"][mode].get(k) or 0 for mode in modes]
