@@ -160,8 +160,11 @@ def main():
     (trp, trl), (vap, val), (tep, tel) = part["train"], part["val"], part["test"]
     print(f"split sizes -> train {len(trp)}  val {len(vap)}  test {len(tep)}")
 
-    print("extracting HOG (train with augmentation, val/test originals)...")
-    Xtr, ytr = build_features(trp, trl, augment=True)
+    # TRAIN is already offline-augmented + class-balanced on disk by
+    # rt_augment_train.py (so HOG sees the enlarged set); skip the extra
+    # in-memory augmentation here to avoid a ~6k-sample SVM grid-search blow-up.
+    print("extracting HOG (train already offline-augmented; val/test originals)...")
+    Xtr, ytr = build_features(trp, trl, augment=False)
     Xva, yva = build_features(vap, val, augment=False)
     Xte, yte = build_features(tep, tel, augment=False)
     print(f"train feats: {Xtr.shape}  class balance: {dict(Counter(ytr.tolist()))}")
