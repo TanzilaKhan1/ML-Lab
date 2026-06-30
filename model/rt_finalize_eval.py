@@ -369,13 +369,15 @@ def main():
 
     full = {"dataset": dataset, "models": summary}
     (OUT / "metrics_full.json").write_text(json.dumps(full, indent=2))
-    # also refresh predictor metrics.json (lightweight: test block per model)
+    # lightweight per-model diagnostic dump (NOT the app's metrics.json — that
+    # is owned by rt_app_metrics.py, which renders the Analysis page schema).
     light = {d: {"kind": summary[d]["kind"],
                  "operating_thresholds": summary[d]["operating_thresholds"],
                  "default_deployed_mode": summary[d]["default_deployed_mode"],
                  "test": summary[d]["test"], "val": summary[d]["val"]} for d in order}
-    (PRED_MODEL_DIR / "metrics.json").write_text(
+    (PRED_MODEL_DIR / "metrics_models.json").write_text(
         json.dumps({"dataset": dataset, "models": light}, indent=2))
+    print("next: run  python rt_app_metrics.py  to refresh the app's metrics.json")
 
     print(f"\nwrote {OUT/'metrics_full.json'}")
     print(f"figures -> {FIG}")

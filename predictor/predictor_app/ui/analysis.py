@@ -66,20 +66,18 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
         unsafe_allow_html=True,
     )
     st.caption(
-        "Held-out error = **CV (n=327)** for the deep transfer models (the n=58 test is "
-        "noisy — one image ≈ 6.7%) and the **Test (n=58)** error for the rest, so variance "
-        "is computed from the CV column where present and the Test column otherwise. CV is "
-        "measured on the train+val images, so the deep-model variance here is a lower bound; "
-        "the Test column is the untouched-hold-out cross-check."
+        "Variance is read from the **Val (n=65)** column (validation was used for threshold "
+        "tuning + model selection, so it leans slightly optimistic); the **Test (n=65)** "
+        "column is the untouched hold-out cross-check. With 65 images per split, one image ≈ 1.5%."
     )
 
     rows = []
     for d in diags:
-        cv_err = _pct(d.dev_error) if d.headline_is_cv else "—"
+        val_err = _pct(d.dev_error)
         rows.append(
             f'<tr><td class="model">{_html.escape(d.name)}</td>'
             f'<td class="num grpsep">{_pct(d.train_error)}</td>'
-            f'<td class="num">{cv_err}</td>'
+            f'<td class="num">{val_err}</td>'
             f'<td class="num">{_pct(d.test_error)}</td>'
             f'<td class="num grpsep">{_signed_pct(d.avoidable_bias)}</td>'
             f'<td class="num">{_signed_pct(d.variance)}</td>'
@@ -95,7 +93,7 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
         '<th class="lft grpsep" rowspan="2">Diagnosis</th>'
         '</tr>'
         '<tr class="sub">'
-        '<th class="grpsep">Train</th><th>CV (n=327)</th><th>Test (n=58)</th>'
+        '<th class="grpsep">Train</th><th>Val (n=65)</th><th>Test (n=65)</th>'
         '<th class="grpsep">Avoidable bias</th><th>Variance</th>'
         '</tr></thead><tbody>'
         + "".join(rows)
@@ -106,7 +104,7 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
     if all(d.train_error is None for d in diags):
         st.warning(
             "**Train error not measured yet** — avoidable bias & variance can't be computed. "
-            "Run `python model/export_metrics.py` where the dataset lives, "
+            "Run `python model/rt_app_metrics.py` where the dataset lives, "
             "commit the refreshed `metrics.json`, and reboot the app. The table fills in automatically."
         )
         return
@@ -128,31 +126,22 @@ def _render_performance(diags: list[ModelDiagnosis]) -> None:
     st.markdown(
         '<p class="pp-legend"><b>All values are scores — higher is better.</b> '
         "Accuracy and unsafe-class recall are percentages; AUC is the 0–1 ROC area. "
-        "For this 2.9:1-imbalanced safety task, <b>unsafe-recall</b> matters most.</p>",
+        "For this 2.1:1-imbalanced safety task, <b>unsafe-recall</b> matters most.</p>",
         unsafe_allow_html=True,
     )
     st.caption(
-        "**CV (n=327)** = 5-fold cross-validation over the train+val images — the "
-        "deep-model headline, used because one image moves the small n=58 test score "
-        "~6.7%. Because CV is measured on data the models were selected on, it is "
-        "optimistic-leaning. **Test (n=58)** = the untouched hold-out — the honest "
-        "cross-check. Models without a CV run show “—” in that column."
+        "**Val (n=65)** = the validation split used for threshold tuning + model selection, "
+        "so it leans slightly optimistic. **Test (n=65)** = the untouched hold-out — the "
+        "honest cross-check. With 65 images per split, one image ≈ 1.5%."
     )
 
     rows = []
     for d in diags:
-        is_cv = d.headline_is_cv
-        acc_cv = _pct(d.accuracy) if is_cv else "—"
-        acc_t = _pct(d.test_accuracy) if is_cv else _pct(d.accuracy)
-        rec_cv = _pct(d.unsafe_recall) if is_cv else "—"
-        rec_t = _pct(d.test_unsafe_recall) if is_cv else _pct(d.unsafe_recall)
-        auc_cv = _auc(d.auc) if is_cv else "—"
-        auc_t = _auc(d.test_auc) if is_cv else _auc(d.auc)
         rows.append(
             f'<tr><td class="model">{_html.escape(d.name)}</td>'
-            f'<td class="num grpsep">{acc_cv}</td><td class="num">{acc_t}</td>'
-            f'<td class="num grpsep">{rec_cv}</td><td class="num">{rec_t}</td>'
-            f'<td class="num grpsep">{auc_cv}</td><td class="num">{auc_t}</td></tr>'
+            f'<td class="num grpsep">{_pct(d.accuracy)}</td><td class="num">{_pct(d.test_accuracy)}</td>'
+            f'<td class="num grpsep">{_pct(d.unsafe_recall)}</td><td class="num">{_pct(d.test_unsafe_recall)}</td>'
+            f'<td class="num grpsep">{_auc(d.auc)}</td><td class="num">{_auc(d.test_auc)}</td></tr>'
         )
 
     table = (
@@ -164,9 +153,9 @@ def _render_performance(diags: list[ModelDiagnosis]) -> None:
         '<th class="grpsep" colspan="2">AUC</th>'
         '</tr>'
         '<tr class="sub">'
-        '<th class="grpsep">CV (n=327)</th><th>Test (n=58)</th>'
-        '<th class="grpsep">CV (n=327)</th><th>Test (n=58)</th>'
-        '<th class="grpsep">CV (n=327)</th><th>Test (n=58)</th>'
+        '<th class="grpsep">Val (n=65)</th><th>Test (n=65)</th>'
+        '<th class="grpsep">Val (n=65)</th><th>Test (n=65)</th>'
+        '<th class="grpsep">Val (n=65)</th><th>Test (n=65)</th>'
         '</tr></thead><tbody>'
         + "".join(rows)
         + "</tbody></table></div>"
@@ -244,7 +233,7 @@ def render_analysis_page() -> None:
     if data is None:
         st.warning(
             "No `metrics.json` found in the model directory. Generate it with "
-            "`python model/export_metrics.py` and place it alongside the model files."
+            "`python model/rt_app_metrics.py` and place it alongside the model files."
         )
         return
 
