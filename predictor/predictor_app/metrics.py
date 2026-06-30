@@ -36,8 +36,7 @@ class ModelDiagnosis:
     dev_method: str
     test_error: Optional[float]
     val_contaminated: bool = False
-    # Held-out test (n=58) metrics, kept separate from the headline (which is CV
-    # for the deep models). None for models whose headline already IS the test.
+    # Held-out TEST metrics, kept separate from the headline (the Val column).
     test_accuracy: Optional[float] = None
     test_unsafe_recall: Optional[float] = None
     test_auc: Optional[float] = None

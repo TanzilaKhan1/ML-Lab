@@ -210,15 +210,14 @@ def _render_auc_plateau(ap: dict) -> None:
     points = ap.get("points")
     if not points:
         return
-    st.markdown("### 📈 Has it plateaued? (the data-ceiling test)")
+    st.markdown("### 📈 The data-ceiling test")
     st.caption(
-        "Ng's plateau test: if stacking stronger techniques no longer moves the "
-        "curve, more of the *same kind of effort* won't reach the goal. Across six "
-        "recall-improvement techniques the CV AUC never clears the **~0.93 ceiling** "
-        "— so the binding constraint is **data** (label noise + too few clear unsafe "
-        "images), not model capacity."
+        "Ng's plateau test: if stacking stronger techniques no longer moves the curve, "
+        "more of the *same kind of effort* won't reach the goal. The old ~0.93 AUC "
+        "plateau was **broken by adding unsafe data** (98→140 images → AUC 0.949), "
+        "confirming the binding constraint was **data**, not model capacity."
     )
-    _show(charts.auc_plateau(points, ap.get("ceiling", 0.93)))
+    _show(charts.auc_plateau(points, ap.get("ceiling", 0.95)))
 
 
 def _render_diagnosis(dg: dict) -> None:
