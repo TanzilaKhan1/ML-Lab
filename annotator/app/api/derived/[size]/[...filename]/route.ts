@@ -10,6 +10,37 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+// Bound libvips' own cache/threading so a single decode can't balloon memory
+// on small instances (Render free tier is 512MB).
+sharp.cache({ memory: 50, files: 0 });
+sharp.concurrency(1);
+
+// Cap how many decode/resize jobs run at once IN THIS PROCESS. A burst of
+// thumbnail requests for uncached images (e.g. right after a bulk upload)
+// used to fire unbounded concurrent full-resolution decodes and OOM the
+// instance. This is a simple counting semaphore, not a queue-fairness
+// guarantee — fine for a low-traffic internal tool.
+const MAX_CONCURRENT_DECODES = 2;
+let activeDecodes = 0;
+const decodeWaiters: (() => void)[] = [];
+function acquireDecodeSlot(): Promise<() => void> {
+  return new Promise((resolve) => {
+    const tryAcquire = () => {
+      if (activeDecodes < MAX_CONCURRENT_DECODES) {
+        activeDecodes++;
+        resolve(() => {
+          activeDecodes--;
+          const next = decodeWaiters.shift();
+          if (next) next();
+        });
+      } else {
+        decodeWaiters.push(tryAcquire);
+      }
+    };
+    tryAcquire();
+  });
+}
+
 // Derivative tiers — pixel longest side. WebP quality is tuned per use:
 // thumbs are ~1KB targets so quality is irrelevant; preview is what the
 // canvas paints first, so we keep it visually clean.
@@ -113,6 +144,7 @@ export async function GET(
   }
 
   let webp: Buffer;
+  const releaseDecodeSlot = await acquireDecodeSlot();
   try {
     webp = await sharp(raw.body, { failOn: "none" })
       .rotate()
@@ -131,6 +163,8 @@ export async function GET(
       { error: "Image could not be resized", errorId },
       { status: 500 },
     );
+  } finally {
+    releaseDecodeSlot();
   }
 
   // Cache write must outlive the response on serverless platforms — `after()`
