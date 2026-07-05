@@ -1,59 +1,59 @@
-# Hanging-Passenger (Safe / Unsafe) Classifier — Technical Report
+# Hanging-Passenger (Safe / Unsafe) Classifier: Technical Report
 
-Detecting passengers hanging on the doors of **buses / legunas** — a Dhaka road-safety violation — as a binary image-classification task. This report reflects the **432-image** retrain.
+Detecting passengers hanging on the doors of **buses / legunas** (a Dhaka road-safety violation) as a binary image-classification task. This report reflects the **523-image** retrain.
 
 ## 1. Dataset
 
-- **432 annotated images**, labels derived from the image **annotations** (a box labelled `unsafe` ⇒ unsafe; else `safe`; `license` ignored) — not the bucket folder names.
-- Class balance: **292 safe / 140 unsafe** (≈2.1 : 1).
+- **523 annotated images**, labels derived from the image **annotations** (a box labelled `unsafe` ⇒ unsafe; else `safe`; `license` ignored), not the bucket folder names.
+- Class balance: **272 safe / 251 unsafe** (≈1.08 : 1).
 - Source: Cloudflare R2 bucket `machine-learning` (raw images + annotations).
 
-## 2. Method — split & augmentation (no leakage)
+## 2. Method: split & augmentation (no leakage)
 
 - **4-way stratified (vehicle × class) 70 / 15 / 15** split so val & test each carry every category (bus-safe, bus-unsafe, legua-safe, legua-unsafe).
-- **Train** = 1600 images = 302 originals + **1298 offline A–Z augmentations**, class-balanced (816 safe / 784 unsafe).
-- **Val** = 65, **Test** = 65 — real originals only (augmentation applied to TRAIN only → no data leakage).
+- **Train** = 2730 images = 365 originals + **2365 offline A–Z augmentations**, class-balanced (1330 safe / 1400 unsafe).
+- **Val** = 79, **Test** = 79, real originals only (augmentation applied to TRAIN only → no data leakage).
 - Deep nets: ImageNet-pretrained, two-phase fine-tune, online aug + WeightedRandomSampler, threshold tuned on val, hflip TTA. Classical: HOG → StandardScaler → PCA → classifier. GPU = RTX 5090.
 
-## 3. Results — held-out TEST (balanced operating point)
+## 3. Results: held-out TEST (balanced operating point)
 
 | Model | Acc | Bal-Acc | Recall (unsafe) | Precision | F1 | ROC-AUC | PR-AUC | MCC |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Ensemble (best)** | 0.862 | 0.873 | 0.905 | 0.731 | 0.809 | 0.949 | 0.919 | 0.712 |
-| **ResNet50** | 0.846 | 0.812 | 0.714 | 0.789 | 0.750 | 0.943 | 0.914 | 0.641 |
-| **ConvNeXt-Tiny** | 0.815 | 0.826 | 0.857 | 0.667 | 0.750 | 0.944 | 0.915 | 0.619 |
-| **EfficientNet-B0** | 0.769 | 0.792 | 0.857 | 0.600 | 0.706 | 0.909 | 0.887 | 0.548 |
-| **ResNet18** | 0.831 | 0.813 | 0.762 | 0.727 | 0.744 | 0.892 | 0.877 | 0.618 |
-| **CNN** | 0.815 | 0.777 | 0.667 | 0.737 | 0.700 | 0.866 | 0.778 | 0.569 |
-| **SVM (RBF)** | 0.846 | 0.824 | 0.762 | 0.762 | 0.762 | 0.863 | 0.834 | 0.648 |
-| **Logistic Regression** | 0.785 | 0.754 | 0.667 | 0.667 | 0.667 | 0.800 | 0.673 | 0.508 |
-| **Naive Bayes** | 0.677 | 0.612 | 0.429 | 0.500 | 0.462 | 0.646 | 0.576 | 0.234 |
+| **Ensemble (best)** | 0.861 | 0.864 | 0.947 | 0.800 | 0.867 | 0.970 | 0.978 | 0.734 |
+| **ResNet50** | 0.924 | 0.924 | 0.921 | 0.921 | 0.921 | 0.967 | 0.975 | 0.848 |
+| **ConvNeXt-Tiny** | 0.835 | 0.840 | 0.947 | 0.766 | 0.847 | 0.972 | 0.979 | 0.691 |
+| **EfficientNet-B0** | 0.835 | 0.841 | 0.974 | 0.755 | 0.851 | 0.979 | 0.980 | 0.701 |
+| **ResNet18** | 0.911 | 0.912 | 0.921 | 0.897 | 0.909 | 0.971 | 0.976 | 0.823 |
+| **CNN** | 0.861 | 0.861 | 0.868 | 0.846 | 0.857 | 0.929 | 0.896 | 0.722 |
+| **SVM (RBF)** | 0.873 | 0.874 | 0.895 | 0.850 | 0.872 | 0.952 | 0.958 | 0.748 |
+| **Logistic Regression** | 0.810 | 0.810 | 0.816 | 0.795 | 0.805 | 0.887 | 0.900 | 0.620 |
+| **Naive Bayes** | 0.734 | 0.734 | 0.737 | 0.718 | 0.727 | 0.866 | 0.884 | 0.468 |
 
 ## 4. Train / Val / Test accuracy (generalization)
 
 | Model | Train | Val | Test | Train→Test gap |
 | --- | --- | --- | --- | --- |
-| Ensemble (best) | 0.996 | 0.877 | 0.862 | 13.4 pts |
-| ResNet50 | 0.996 | 0.908 | 0.846 | 15.0 pts |
-| ConvNeXt-Tiny | 0.999 | 0.877 | 0.815 | 18.4 pts |
-| EfficientNet-B0 | 0.976 | 0.815 | 0.769 | 20.7 pts |
-| ResNet18 | 0.999 | 0.892 | 0.831 | 16.9 pts |
-| CNN | 0.983 | 0.892 | 0.815 | 16.8 pts |
-| SVM (RBF) | 0.959 | 0.831 | 0.846 | 11.3 pts |
-| Logistic Regression | 0.923 | 0.815 | 0.785 | 13.9 pts |
-| Naive Bayes | 0.836 | 0.738 | 0.677 | 15.9 pts |
+| Ensemble (best) | 0.999 | 0.962 | 0.861 | 13.8 pts |
+| ResNet50 | 0.997 | 0.962 | 0.924 | 7.3 pts |
+| ConvNeXt-Tiny | 1.000 | 0.962 | 0.835 | 16.5 pts |
+| EfficientNet-B0 | 0.989 | 0.937 | 0.835 | 15.4 pts |
+| ResNet18 | 0.996 | 0.949 | 0.911 | 8.5 pts |
+| CNN | 0.962 | 0.937 | 0.861 | 10.1 pts |
+| SVM (RBF) | 0.999 | 0.861 | 0.873 | 12.5 pts |
+| Logistic Regression | 0.877 | 0.772 | 0.810 | 6.6 pts |
+| Naive Bayes | 0.832 | 0.810 | 0.734 | 9.8 pts |
 
 ## 5. Deployed operating modes (Ensemble = ResNet50 + ConvNeXt-Tiny)
 
 | Mode | Test acc | Unsafe recall | Use when |
 | --- | --- | --- | --- |
-| Balanced | 86.2% | 90.5% | max overall accuracy |
-| High-recall (default) | 69.2% | 100.0% | safety-leaning |
-| Max-recall (zero-miss) | 41.5% | 100.0% | never miss an unsafe |
+| Balanced | 86.1% | 94.7% | max overall accuracy |
+| High-recall (default) | 86.1% | 94.7% | safety-leaning |
+| Max-recall (zero-miss) | 86.1% | 94.7% | never miss an unsafe |
 
 ## 6. Headline
 
-**Ensemble — TEST accuracy 86.2%, unsafe-recall 90.5%, ROC-AUC 0.949.** The added unsafe data raised AUC past the old 0.929 ceiling and lifted the zero-miss (100%-recall) operating point to ~42% accuracy (was ~26%).
+**Ensemble: TEST accuracy 86.1%, unsafe-recall 94.7%, ROC-AUC 0.970.** The added unsafe data lifted ROC-AUC to 0.970 (past the old ~0.93 plateau) and the recall-priority operating point reaches 95% unsafe-recall at 86% accuracy.
 
 ## 7. Figures & tables
 

@@ -63,7 +63,7 @@ WARM = LinearSegmentedColormap.from_list("paperblue", ["#FFFFFF", "#C6DBEF", "#6
 
 plt.rcParams.update({
     "figure.facecolor": CREAM, "savefig.facecolor": CREAM, "axes.facecolor": PANEL,
-    "figure.dpi": 150, "savefig.dpi": 200, "savefig.bbox": "tight",
+    "figure.dpi": 150, "savefig.dpi": 300, "savefig.bbox": "tight",
     "font.family": "DejaVu Sans", "font.size": 11.5,
     "text.color": INK, "axes.labelcolor": INK, "axes.edgecolor": "#BBBBBB",
     "xtick.color": SUBINK, "ytick.color": SUBINK,
@@ -79,9 +79,11 @@ def despine(ax):
 
 
 def suptitle(fig, title, sub=None):
-    fig.suptitle(title, fontsize=16, fontweight="bold", color=INK, y=0.985)
+    # anchor both lines to their top edge so the (absolute-point) title never
+    # descends into the subtitle on shorter landscape figures.
+    fig.suptitle(title, fontsize=16, fontweight="bold", color=INK, y=0.99, va="top")
     if sub:
-        fig.text(0.5, 0.94, sub, ha="center", fontsize=10.5, color=SUBINK)
+        fig.text(0.5, 0.925, sub, ha="center", va="top", fontsize=10.5, color=SUBINK)
 
 
 # ───────────────────────── load data ─────────────────────────
@@ -361,7 +363,7 @@ def fig_table():
             tbl[i, j].set_facecolor("#FFFFFF" if i % 2 else "#F0F3F8")
     ax.set_title("Model comparison — held-out test, balanced operating point",
                  fontweight="bold", fontsize=13, pad=16, color=INK)
-    fig.savefig(FIG / "fig10_results_table.png", dpi=200); plt.close(fig)
+    fig.savefig(FIG / "fig10_results_table.png", dpi=300); plt.close(fig)
     print("  fig10_results_table")
 
 
@@ -455,7 +457,7 @@ def tables():
     r4 = [["train (augmented)", D["train_total"], sc["train"]["0"], sc["train"]["1"]],
           ["val", D["val_total"], sc["val"]["0"], sc["val"]["1"]],
           ["test", D["test_total"], sc["test"]["0"], sc["test"]["1"]],
-          ["originals (labeled)", D["total_labeled_images"], 292, 140]]
+          ["originals (labeled)", D["total_labeled_images"], D["n_safe"], D["n_unsafe"]]]
     (TAB / "table_dataset.md").write_text("### Dataset composition\n\n" + _md(h4, r4) + "\n")
     print("  tables: table_models_test.{md,csv}, table_train_val_test.{md,csv}, "
           "table_operating_modes.md, table_dataset.md")
@@ -465,8 +467,8 @@ def readme():
     best = bal("Ensemble (best)", "test")
     txt = f"""# Paper Assets — Hanging-Passenger (Safe/Unsafe) Classifier
 
-Regenerated from the **432-image** retrain (annotation-derived labels; train-only
-A–Z augmentation → 1600 train images; honest 65-image val & test holdouts).
+Regenerated from the **{D["total_labeled_images"]}-image** retrain (annotation-derived labels; train-only
+A–Z augmentation → {D["train_total"]} train images; honest {D["val_total"]}-image val & {D["test_total"]}-image test holdouts).
 Theme: warm publication palette. All numbers come from `model/outputs_final/metrics_full.json`.
 
 **Headline:** Ensemble (ResNet50 + ConvNeXt-Tiny, TTA) — TEST accuracy

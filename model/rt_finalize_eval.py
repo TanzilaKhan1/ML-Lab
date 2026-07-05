@@ -351,12 +351,20 @@ def main():
     plot_bars(summary, FIG / "bars_test.png", mode="balanced")
     plot_overfit(summary, FIG / "train_vs_test.png", mode="balanced")
 
-    # dataset composition
+    # dataset composition (originals only; augmentation is train-only and not counted here)
     aug_train = sum(1 for p in splits["train"][0] if "_aug" in Path(p).stem)
+    orig_labels = [lab for p, lab in zip(splits["train"][0], splits["train"][1])
+                   if "_aug" not in Path(p).stem] + list(splits["val"][1]) + list(splits["test"][1])
+    n_originals = len(orig_labels)
+    n_safe = int(sum(1 for l in orig_labels if int(l) == 0))
+    n_unsafe = int(sum(1 for l in orig_labels if int(l) == 1))
     dataset = {
         "source": "Cloudflare R2 bucket 'machine-learning' (raw + annotations)",
         "labels_from": "annotations (unsafe if any 'unsafe' box, else safe)",
-        "total_labeled_images": 432,
+        "total_labeled_images": n_originals,
+        "n_safe": n_safe,
+        "n_unsafe": n_unsafe,
+        "imbalance_ratio": round(n_safe / max(n_unsafe, 1), 2),
         "split_strategy": "4-way stratified (vehicle x class) 70/15/15; augment TRAIN only -> no leakage",
         "split_counts": {sp: dict(Counter(splits[sp][1])) for sp in ("train", "val", "test")},
         "train_originals": len(splits["train"][0]) - aug_train,

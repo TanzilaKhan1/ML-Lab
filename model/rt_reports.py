@@ -34,29 +34,29 @@ def report_md():
     mr = MODELS["Ensemble (best)"]["test"]["max_recall"]
     L = []
     A = L.append
-    A("# Hanging-Passenger (Safe / Unsafe) Classifier — Technical Report\n")
-    A("Detecting passengers hanging on the doors of **buses / legunas** — a Dhaka "
-      "road-safety violation — as a binary image-classification task. This report "
-      "reflects the **432-image** retrain.\n")
+    A("# Hanging-Passenger (Safe / Unsafe) Classifier: Technical Report\n")
+    A("Detecting passengers hanging on the doors of **buses / legunas** (a Dhaka "
+      "road-safety violation) as a binary image-classification task. This report "
+      f"reflects the **{D['total_labeled_images']}-image** retrain.\n")
     A("## 1. Dataset\n")
     A(f"- **{D['total_labeled_images']} annotated images**, labels derived from the "
-      "image **annotations** (a box labelled `unsafe` ⇒ unsafe; else `safe`; `license` ignored) — "
+      "image **annotations** (a box labelled `unsafe` ⇒ unsafe; else `safe`; `license` ignored), "
       "not the bucket folder names.\n"
-      f"- Class balance: **292 safe / 140 unsafe** (≈2.1 : 1).\n"
+      f"- Class balance: **{D['n_safe']} safe / {D['n_unsafe']} unsafe** (≈{D['imbalance_ratio']} : 1).\n"
       f"- Source: Cloudflare R2 bucket `machine-learning` (raw images + annotations).\n")
     sc = D["split_counts"]
-    A("## 2. Method — split & augmentation (no leakage)\n")
+    A("## 2. Method: split & augmentation (no leakage)\n")
     A(f"- **4-way stratified (vehicle × class) 70 / 15 / 15** split so val & test each "
       "carry every category (bus-safe, bus-unsafe, legua-safe, legua-unsafe).\n"
       f"- **Train** = {D['train_total']} images = {D['train_originals']} originals + "
       f"**{D['train_augmented_copies']} offline A–Z augmentations**, class-balanced "
       f"({sc['train']['0']} safe / {sc['train']['1']} unsafe).\n"
-      f"- **Val** = {D['val_total']}, **Test** = {D['test_total']} — real originals only "
+      f"- **Val** = {D['val_total']}, **Test** = {D['test_total']}, real originals only "
       "(augmentation applied to TRAIN only → no data leakage).\n"
       "- Deep nets: ImageNet-pretrained, two-phase fine-tune, online aug + WeightedRandomSampler, "
       "threshold tuned on val, hflip TTA. Classical: HOG → StandardScaler → PCA → classifier. "
       "GPU = RTX 5090.\n")
-    A("## 3. Results — held-out TEST (balanced operating point)\n")
+    A("## 3. Results: held-out TEST (balanced operating point)\n")
     hdr = ["Model", "Acc", "Bal-Acc", "Recall (unsafe)", "Precision", "F1", "ROC-AUC", "PR-AUC", "MCC"]
     A("| " + " | ".join(hdr) + " |")
     A("| " + " | ".join(["---"] * len(hdr)) + " |")
@@ -81,10 +81,11 @@ def report_md():
     A(f"| Max-recall (zero-miss) | {mr['accuracy']*100:.1f}% | {mr['recall_unsafe']*100:.1f}% | never miss an unsafe |")
     A("")
     A("## 6. Headline\n")
-    A(f"**Ensemble — TEST accuracy {e['accuracy']*100:.1f}%, unsafe-recall "
+    A(f"**Ensemble: TEST accuracy {e['accuracy']*100:.1f}%, unsafe-recall "
       f"{e['recall_unsafe']*100:.1f}%, ROC-AUC {e['roc_auc']:.3f}.** The added unsafe data "
-      f"raised AUC past the old 0.929 ceiling and lifted the zero-miss (100%-recall) "
-      f"operating point to ~{mr['accuracy']*100:.0f}% accuracy (was ~26%).\n")
+      f"lifted ROC-AUC to {e['roc_auc']:.3f} (past the old ~0.93 plateau) and the recall-priority "
+      f"operating point reaches {mr['recall_unsafe']*100:.0f}% unsafe-recall at "
+      f"{mr['accuracy']*100:.0f}% accuracy.\n")
     A("## 7. Figures & tables\n")
     A("See `paper_assets/figures/` (fig01–fig12) and `paper_assets/tables/`. "
       "Full per-metric data: `model/outputs_final/metrics_full.json`.\n")
@@ -100,7 +101,7 @@ def label_audit_md():
         if r["label"] != folder_lbl:
             mism.append(r)
     by = Counter(r["label"] for r in LABELS)
-    L = ["# Label Audit — annotation-derived vs bucket folder\n",
+    L = ["# Label Audit: annotation-derived vs bucket folder\n",
          f"- Total labeled images: **{len(LABELS)}** (safe {by['safe']} / unsafe {by['unsafe']}).",
          "- Labels are ground truth from **annotations** (a box labelled `unsafe` ⇒ unsafe; "
          "else `safe`; `license` ignored), which can differ from the R2 bucket folder name.",

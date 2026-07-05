@@ -1,87 +1,87 @@
-# Safe / Unsafe (Hanging-Passenger) Classifier — Retrained Results
+# Safe / Unsafe (Hanging-Passenger) Classifier: Retrained Results
 
 Binary image classification: passengers hanging on **bus / leguna** doors (`unsafe`) vs not (`safe`). Dhaka road-safety task.
 
 ## Dataset
 - Source: Cloudflare R2 bucket 'machine-learning' (raw + annotations)
 - Labels: annotations (unsafe if any 'unsafe' box, else safe)
-- **Total labeled images: 432** (originals: safe 292 / unsafe 140)
+- **Total labeled images: 523** (originals: safe 272 / unsafe 251)
 - Split strategy: 4-way stratified (vehicle x class) 70/15/15; augment TRAIN only -> no leakage
-- **Train**: 1600 images = 302 originals + **1298 offline augmentations** (safe 816 / unsafe 784, balanced)
-- **Val**: 65 (safe 44 / unsafe 21) — real originals only
-- **Test**: 65 (safe 44 / unsafe 21) — untouched holdout, real originals only
+- **Train**: 2730 images = 365 originals + **2365 offline augmentations** (safe 1330 / unsafe 1400, balanced)
+- **Val**: 79 (safe 41 / unsafe 38), real originals only
+- **Test**: 79 (safe 41 / unsafe 38), untouched holdout, real originals only
 - Val & Test are 4-way stratified so each contains every category (bus-safe, bus-unsafe, legua-safe, legua-unsafe).
 - Augmentation is applied to **TRAIN only** → no data leakage.
 
-## 1. Main results — BALANCED operating point (max accuracy)
+## 1. Main results: BALANCED operating point (max accuracy)
 
 | Model | Train acc | Val acc | Test acc | Test recall (unsafe) | Test prec (unsafe) | Test F1 (unsafe) | Test ROC-AUC | Test PR-AUC | Test MCC |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **Ensemble (best)** | 99.6% | 87.7% | 86.2% | 90.5% | 73.1% | 0.809 | 0.949 | 0.919 | 0.712 |
-| **ResNet50** | 99.6% | 90.8% | 84.6% | 71.4% | 78.9% | 0.750 | 0.943 | 0.914 | 0.641 |
-| **ConvNeXt-Tiny** | 99.9% | 87.7% | 81.5% | 85.7% | 66.7% | 0.750 | 0.944 | 0.915 | 0.619 |
-| **EfficientNet-B0** | 97.6% | 81.5% | 76.9% | 85.7% | 60.0% | 0.706 | 0.909 | 0.887 | 0.548 |
-| **ResNet18** | 99.9% | 89.2% | 83.1% | 76.2% | 72.7% | 0.744 | 0.892 | 0.877 | 0.618 |
-| **CNN** | 98.3% | 89.2% | 81.5% | 66.7% | 73.7% | 0.700 | 0.866 | 0.778 | 0.569 |
-| **SVM (RBF)** | 95.9% | 83.1% | 84.6% | 76.2% | 76.2% | 0.762 | 0.863 | 0.834 | 0.648 |
-| **Logistic Regression** | 92.3% | 81.5% | 78.5% | 66.7% | 66.7% | 0.667 | 0.800 | 0.673 | 0.508 |
-| **Naive Bayes** | 83.6% | 73.8% | 67.7% | 42.9% | 50.0% | 0.462 | 0.646 | 0.576 | 0.234 |
+| **Ensemble (best)** | 99.9% | 96.2% | 86.1% | 94.7% | 80.0% | 0.867 | 0.970 | 0.978 | 0.734 |
+| **ResNet50** | 99.7% | 96.2% | 92.4% | 92.1% | 92.1% | 0.921 | 0.967 | 0.975 | 0.848 |
+| **ConvNeXt-Tiny** | 100.0% | 96.2% | 83.5% | 94.7% | 76.6% | 0.847 | 0.972 | 0.979 | 0.691 |
+| **EfficientNet-B0** | 98.9% | 93.7% | 83.5% | 97.4% | 75.5% | 0.851 | 0.979 | 0.980 | 0.701 |
+| **ResNet18** | 99.6% | 94.9% | 91.1% | 92.1% | 89.7% | 0.909 | 0.971 | 0.976 | 0.823 |
+| **CNN** | 96.2% | 93.7% | 86.1% | 86.8% | 84.6% | 0.857 | 0.929 | 0.896 | 0.722 |
+| **SVM (RBF)** | 99.9% | 86.1% | 87.3% | 89.5% | 85.0% | 0.872 | 0.952 | 0.958 | 0.748 |
+| **Logistic Regression** | 87.7% | 77.2% | 81.0% | 81.6% | 79.5% | 0.805 | 0.887 | 0.900 | 0.620 |
+| **Naive Bayes** | 83.2% | 81.0% | 73.4% | 73.7% | 71.8% | 0.727 | 0.866 | 0.884 | 0.468 |
 
-## 2. HIGH-RECALL operating point (catch >=95% of unsafe — safety default)
+## 2. HIGH-RECALL operating point (catch >=95% of unsafe, safety default)
 
 | Model | Test acc | Test recall (unsafe) | Test precision (unsafe) | Test specificity |
 | --- | --- | --- | --- | --- |
-| **Ensemble (best)** | 69.2% | 100.0% | 51.2% | 54.5% |
-| **ResNet50** | 72.3% | 95.2% | 54.1% | 61.4% |
-| **ConvNeXt-Tiny** | 66.2% | 100.0% | 48.8% | 50.0% |
-| **EfficientNet-B0** | 58.5% | 100.0% | 43.8% | 38.6% |
-| **ResNet18** | 64.6% | 85.7% | 47.4% | 54.5% |
-| **CNN** | 61.5% | 90.5% | 45.2% | 47.7% |
-| **SVM (RBF)** | 63.1% | 90.5% | 46.3% | 50.0% |
-| **Logistic Regression** | 52.3% | 90.5% | 39.6% | 34.1% |
-| **Naive Bayes** | 46.2% | 81.0% | 35.4% | 29.5% |
+| **Ensemble (best)** | 86.1% | 94.7% | 80.0% | 78.0% |
+| **ResNet50** | 83.5% | 92.1% | 77.8% | 75.6% |
+| **ConvNeXt-Tiny** | 88.6% | 94.7% | 83.7% | 82.9% |
+| **EfficientNet-B0** | 86.1% | 97.4% | 78.7% | 75.6% |
+| **ResNet18** | 81.0% | 94.7% | 73.5% | 68.3% |
+| **CNN** | 83.5% | 92.1% | 77.8% | 75.6% |
+| **SVM (RBF)** | 68.4% | 100.0% | 60.3% | 39.0% |
+| **Logistic Regression** | 62.0% | 97.4% | 56.1% | 29.3% |
+| **Naive Bayes** | 57.0% | 100.0% | 52.8% | 17.1% |
 
 ## 3. MAX-RECALL / zero-miss operating point (100% unsafe recall)
 
 | Model | Test acc | Test recall (unsafe) | Test precision (unsafe) |
 | --- | --- | --- | --- |
-| **Ensemble (best)** | 41.5% | 100.0% | 35.6% |
-| **ResNet50** | 33.8% | 100.0% | 32.8% |
-| **ConvNeXt-Tiny** | 56.9% | 100.0% | 42.9% |
-| **EfficientNet-B0** | 32.3% | 100.0% | 32.3% |
-| **ResNet18** | 47.7% | 100.0% | 38.2% |
-| **CNN** | 52.3% | 100.0% | 40.4% |
-| **SVM (RBF)** | 63.1% | 90.5% | 46.3% |
-| **Logistic Regression** | 44.6% | 95.2% | 36.4% |
-| **Naive Bayes** | 43.1% | 85.7% | 34.6% |
+| **Ensemble (best)** | 86.1% | 94.7% | 80.0% |
+| **ResNet50** | 81.0% | 97.4% | 72.5% |
+| **ConvNeXt-Tiny** | 88.6% | 94.7% | 83.7% |
+| **EfficientNet-B0** | 86.1% | 97.4% | 78.7% |
+| **ResNet18** | 59.5% | 100.0% | 54.3% |
+| **CNN** | 83.5% | 97.4% | 75.5% |
+| **SVM (RBF)** | 70.9% | 100.0% | 62.3% |
+| **Logistic Regression** | 50.6% | 100.0% | 49.4% |
+| **Naive Bayes** | 53.2% | 100.0% | 50.7% |
 
 ## 4. Operating thresholds per model (tuned on validation)
 
 | Model | balanced | high_recall | max_recall | deployed default |
 | --- | --- | --- | --- | --- |
-| Ensemble (best) | 0.175 | 0.035 | 0.013 | high_recall |
-| ResNet50 | 0.445 | 0.040 | 0.005 | high_recall |
-| ConvNeXt-Tiny | 0.135 | 0.030 | 0.021 | high_recall |
-| EfficientNet-B0 | 0.165 | 0.040 | 0.001 | high_recall |
-| ResNet18 | 0.320 | 0.025 | 0.011 | high_recall |
-| CNN | 0.585 | 0.110 | 0.060 | high_recall |
-| SVM (RBF) | 0.380 | 0.035 | 0.035 | high_recall |
-| Logistic Regression | 0.500 | 0.020 | 0.010 | high_recall |
-| Naive Bayes | 0.830 | 0.270 | 0.162 | high_recall |
+| Ensemble (best) | 0.170 | 0.175 | 0.175 | high_recall |
+| ResNet50 | 0.480 | 0.110 | 0.074 | high_recall |
+| ConvNeXt-Tiny | 0.170 | 0.235 | 0.237 | high_recall |
+| EfficientNet-B0 | 0.185 | 0.245 | 0.248 | high_recall |
+| ResNet18 | 0.200 | 0.030 | 0.001 | high_recall |
+| CNN | 0.425 | 0.215 | 0.136 | high_recall |
+| SVM (RBF) | 0.425 | 0.015 | 0.020 | high_recall |
+| Logistic Regression | 0.465 | 0.050 | 0.002 | high_recall |
+| Naive Bayes | 0.615 | 0.025 | 0.008 | high_recall |
 
 ## 5. Train vs Test (overfitting view, balanced point)
 
 | Model | Train acc | Test acc | Gap |
 | --- | --- | --- | --- |
-| Ensemble (best) | 99.6% | 86.2% | 13.4 pts |
-| ResNet50 | 99.6% | 84.6% | 15.0 pts |
-| ConvNeXt-Tiny | 99.9% | 81.5% | 18.4 pts |
-| EfficientNet-B0 | 97.6% | 76.9% | 20.7 pts |
-| ResNet18 | 99.9% | 83.1% | 16.9 pts |
-| CNN | 98.3% | 81.5% | 16.8 pts |
-| SVM (RBF) | 95.9% | 84.6% | 11.3 pts |
-| Logistic Regression | 92.3% | 78.5% | 13.9 pts |
-| Naive Bayes | 83.6% | 67.7% | 15.9 pts |
+| Ensemble (best) | 99.9% | 86.1% | 13.8 pts |
+| ResNet50 | 99.7% | 92.4% | 7.3 pts |
+| ConvNeXt-Tiny | 100.0% | 83.5% | 16.5 pts |
+| EfficientNet-B0 | 98.9% | 83.5% | 15.4 pts |
+| ResNet18 | 99.6% | 91.1% | 8.5 pts |
+| CNN | 96.2% | 86.1% | 10.1 pts |
+| SVM (RBF) | 99.9% | 87.3% | 12.5 pts |
+| Logistic Regression | 87.7% | 81.0% | 6.6 pts |
+| Naive Bayes | 83.2% | 73.4% | 9.8 pts |
 
 ## Figures (`outputs_final/figures/`)
 - `roc_test.png`
