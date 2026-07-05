@@ -3,8 +3,8 @@
     "resnet50.joblib",
     "convnext_tiny.joblib"
   ],
-  "threshold": 0.035,
-  "threshold_balanced": 0.175,
-  "threshold_high_recall": 0.035,
-  "threshold_max_recall": 0.013099455274641514
+  "threshold": 0.17500000000000002,
+  "threshold_balanced": 0.16999999999999998,
+  "threshold_high_recall": 0.17500000000000002,
+  "threshold_max_recall": 0.1754642128944397
 }

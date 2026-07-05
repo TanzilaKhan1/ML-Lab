@@ -59,7 +59,7 @@ ML-Lab/
  [convert_dataset_to_png.py]  ─── EXIF-orient · RGB · 512×512 centre-crop
          │
          ▼
- [augment.py / augment_images.py]  ─── offline augmentation → 1,600 train images
+ [augment.py / augment_images.py]  ─── offline augmentation → 2,730 train images
          │         (applied to train split ONLY; val & test stay clean originals)
          ▼
  ┌─────────────────────────────────────────────────────────────────┐
@@ -87,13 +87,13 @@ ML-Lab/
 
 | | Count |
 |---|---|
-| Total labelled originals | **432** |
-| Safe (not hanging) | 292 |
-| Unsafe (hanging) | 140 |
-| Class imbalance | 2.1:1 (safe:unsafe) |
-| Train (after augmentation) | **1,600** |
-| Validation | 65 (real originals) |
-| Test (untouched holdout) | 65 (real originals) |
+| Total labelled originals | **523** |
+| Safe (not hanging) | 272 |
+| Unsafe (hanging) | 251 |
+| Class imbalance | 1.08:1 (safe:unsafe) |
+| Train (after augmentation) | **2,730** |
+| Validation | 79 (real originals) |
+| Test (untouched holdout) | 79 (real originals) |
 
 Split strategy: 4-way stratified by vehicle × class (bus-safe, bus-unsafe,
 legua-safe, legua-unsafe), 70 / 15 / 15. Augmentation is applied to **train
@@ -124,7 +124,7 @@ Torch models consume the raw 512×512 RGB image.
 
 ---
 
-## Key results (test set, n = 65)
+## Key results (test set, n = 79)
 
 Three operating points are supported; **high-recall is the deployed default**
 because missing a hanging passenger is worse than a false alarm.
@@ -133,27 +133,27 @@ because missing a hanging passenger is worse than a false alarm.
 
 | Model | Test acc | Unsafe recall | ROC-AUC |
 |---|---|---|---|
-| **Ensemble (best)** | **86.2%** | **90.5%** | **0.949** |
-| ResNet50 | 84.6% | 71.4% | 0.943 |
-| ConvNeXt-Tiny | 81.5% | 85.7% | 0.944 |
-| SVM (RBF) | 84.6% | 76.2% | 0.863 |
-| Logistic Regression | 78.5% | 66.7% | 0.800 |
-| Naive Bayes | 67.7% | 42.9% | 0.646 |
-| Majority baseline | 67.6% | 0% | — |
+| **Ensemble (best)** | **86.1%** | **94.7%** | **0.970** |
+| ResNet50 | 92.4% | 92.1% | 0.967 |
+| ConvNeXt-Tiny | 83.5% | 94.7% | 0.972 |
+| SVM (RBF) | 87.3% | 89.5% | 0.952 |
+| Logistic Regression | 81.0% | 81.6% | 0.887 |
+| Naive Bayes | 73.4% | 73.7% | 0.866 |
+| Majority baseline | 52.0% | 0% | — |
 
 Full tables (all 9 models × 3 operating points × 21 metrics) in
 [RESULTS.md](RESULTS.md).
 
-### High-recall operating point (≥95% unsafe recall)
+### High-recall operating point
 
 | Model | Test acc | Unsafe recall |
 |---|---|---|
-| **Ensemble (best)** | 69.2% | **100%** |
-| ResNet50 | 72.3% | 95.2% |
-| ConvNeXt-Tiny | 66.2% | 100% |
+| **Ensemble (best)** | 86.1% | **94.7%** |
+| ResNet50 | 83.5% | 92.1% |
+| ConvNeXt-Tiny | 88.6% | 94.7% |
 
-The Ensemble at its high-recall threshold catches every unsafe passenger in
-the test set at 69% overall accuracy.
+With the near-balanced dataset the tuned thresholds sit close together, so the
+Ensemble reaches 94.7% unsafe recall (misses 2 of 38 hangers) at 86% accuracy.
 
 ---
 

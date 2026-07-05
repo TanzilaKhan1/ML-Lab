@@ -1,11 +1,12 @@
 # Paper Assets — Hanging-Passenger (Safe/Unsafe) Classifier
 
-Regenerated from the **432-image** retrain (annotation-derived labels; train-only
-A–Z augmentation → 1600 train images; honest 65-image val & test holdouts).
+Regenerated from the **523-image** retrain (annotation-derived labels; train-only
+A–Z augmentation → 2730 train images; honest 79-image val & test holdouts).
 Theme: warm publication palette. All numbers come from `model/outputs_final/metrics_full.json`.
 
 **Headline:** Ensemble (ResNet50 + ConvNeXt-Tiny, TTA) — TEST accuracy
-86.2%, unsafe-recall 90.5%, ROC-AUC 0.949.
+86.1%, unsafe-recall 94.7%, ROC-AUC 0.970. ResNet50 leads single-model
+accuracy at 92.4%.
 
 ## Figures (`figures/`)
 | File | What |

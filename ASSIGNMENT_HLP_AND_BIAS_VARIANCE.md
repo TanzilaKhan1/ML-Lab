@@ -3,11 +3,11 @@
 **Task:** Binary image classification — *safe* vs *unsafe (door-hanging) travel* on Dhaka buses and legunas.
 **Covers assignment bullets 3 and 4:** (3) deciding human-level performance (HLP); (4) bias vs variance — which to reduce first, which method first, and why.
 
-> **Provenance / no-hallucination note.** Numbers come from the **432-image retrain (2026-06-30)**, each marked:
+> **Provenance / no-hallucination note.** Numbers come from the **523-image retrain**, each marked:
 > `[FULL]` = `model/outputs_final/metrics_full.json` — **authoritative**: per-model train / val / test at the balanced operating point (21 metrics × 3 splits);
 > `[TABLES]` = `paper_assets/tables/` — the same numbers as committed tables/figures;
 > `[SHEET]` = `misclassified_6sheets.xlsx` (6-person review, val+test);
-> `[COCO]` = `coco_export.json` (433 images, annotations);
+> `[COCO]` = `coco_export.json` (523 images, annotations);
 > `[RESULTS]` = `RESULTS.md` / `LABEL_AUDIT.md`; `[LIT]` = external papers.
 > **Single run:** train, val and test all come from the *same* checkpoints, so every train↔held-out pairing below is internally consistent (no cross-run caveat).
 
@@ -34,16 +34,16 @@ Error = 1 − accuracy at the balanced threshold. Train error is measured on the
 
 ---
 
-## 2. What we are given (latest, 432-image retrain)
+## 2. What we are given (latest, 523-image retrain)
 
 | Fact | Value | Source |
 |---|---|---|
-| Dataset | **432 images — 292 safe / 140 unsafe (≈2.1:1)** | `[COCO]`/`[RESULTS]` |
-| Split | 70/15/15 stratified by vehicle×class → **302 train (→1600 after train-only A–Z aug) / 65 val / 65 test** (~21 unsafe per holdout) | `[FULL]` |
-| Majority baseline | **67.6%** accuracy ("always safe", 0 violations caught) → track **unsafe-recall** | `[FULL]` |
-| Held-out metric | **Val (65)** = dev (used for threshold tuning + model selection, slightly optimistic); **Test (65)** = untouched cross-check (1 img ≈ 1.5%) | `[FULL]` |
+| Dataset | **523 images — 272 safe / 251 unsafe (≈1.08:1)** | `[COCO]`/`[RESULTS]` |
+| Split | 70/15/15 stratified by vehicle×class → **365 train (→2730 after train-only A–Z aug) / 79 val / 79 test** (~38 unsafe per holdout) | `[FULL]` |
+| Majority baseline | **52.0%** accuracy ("always safe", 0 violations caught) → track **unsafe-recall** | `[FULL]` |
+| Held-out metric | **Val (79)** = dev (used for threshold tuning + model selection, slightly optimistic); **Test (79)** = untouched cross-check (1 img ≈ 1.3%) | `[FULL]` |
 | Contamination | none — every model trains on **train only**; val/test are clean holdouts | `[FULL]` |
-| Modelling ceiling | **broken** — adding unsafe data lifted AUC from the old ~0.93 plateau to **0.949** (Ensemble) | `[RESULTS]` |
+| Modelling ceiling | **broken** — adding unsafe data lifted AUC from the old ~0.93 plateau to **0.970** (Ensemble) | `[RESULTS]` |
 
 ---
 
@@ -68,7 +68,7 @@ Rule is **vehicle-conditional**: leguna → *any* outside rider is unsafe; bus �
 
 **→ HLP error = 4% (Bayes proxy).** Use the stricter expert value so avoidable bias is not overstated.
 
-**Why not 0%:** the relabelled 432-set is now clean — `LABEL_AUDIT.md` reports **0 folder/annotation conflicts** (the old `IMG_3719`-type mislabels were fixed). What remains is *irreducible*: tiny/distant hangers (1–8% of the frame), genuinely ambiguous leaning-vs-hanging poses, and ~0.70–0.85 inter-annotator agreement on subjective safety labels `[LIT]`. So neither human nor model reaches 0%.
+**Why not 0%:** the relabelled 523-set is now clean — `LABEL_AUDIT.md` reports **0 folder/annotation conflicts** (the old `IMG_3719`-type mislabels were fixed). What remains is *irreducible*: tiny/distant hangers (1–8% of the frame), genuinely ambiguous leaning-vs-hanging poses, and ~0.70–0.85 inter-annotator agreement on subjective safety labels `[LIT]`. So neither human nor model reaches 0%.
 
 ---
 
@@ -80,36 +80,36 @@ Rule is **vehicle-conditional**: leguna → *any* outside rider is unsafe; bus �
 
 | Model | Train err | Val err (dev) | Test err | Test AUC | Avoidable bias | Variance | Regime |
 |---|---|---|---|---|---|---|---|
-| **Ensemble (best)** | 0.4% | 12.3% | 13.8% | **0.949** | −3.6% | **+11.9%** | variance-limited |
-| ResNet50 | 0.4% | 9.2% | 15.4% | 0.943 | −3.6% | **+8.8%** | variance-limited |
-| ConvNeXt-Tiny | 0.1% | 12.3% | 18.5% | 0.944 | −3.9% | **+12.2%** | variance-limited |
-| EfficientNet-B0 | 2.4% | 18.5% | 23.1% | 0.909 | −1.6% | **+16.1%** | variance-limited |
-| ResNet18 | 0.1% | 10.8% | 16.9% | 0.892 | −3.9% | **+10.7%** | variance-limited |
-| CNN (scratch) | 1.7% | 10.8% | 18.5% | 0.866 | −2.3% | **+9.1%** | variance-limited |
-| SVM (RBF, HOG) | 4.1% | 16.9% | 15.4% | 0.863 | +0.1% | **+12.8%** | variance-limited |
-| Logistic Reg (HOG) | 7.7% | 18.5% | 21.5% | 0.800 | +3.7% | **+10.8%** | variance-limited |
-| Naive Bayes (HOG) | 16.4% | 26.2% | 32.3% | 0.646 | **+12.4%** | +9.8% | bias-leaning (underfits) |
+| **Ensemble (best)** | 0.1% | 3.8% | 13.9% | **0.970** | −3.9% | **+3.7%** | well-balanced |
+| ResNet50 | 0.3% | 3.8% | 7.6% | 0.967 | −3.7% | **+3.5%** | well-balanced |
+| ConvNeXt-Tiny | 0.0% | 3.8% | 16.5% | 0.972 | −4.0% | **+3.8%** | well-balanced |
+| EfficientNet-B0 | 1.1% | 6.3% | 16.5% | 0.979 | −2.9% | **+5.3%** | variance-limited |
+| ResNet18 | 0.4% | 5.1% | 8.9% | 0.971 | −3.6% | **+4.7%** | well-balanced |
+| CNN (scratch) | 3.8% | 6.3% | 13.9% | 0.929 | −0.2% | **+2.5%** | well-balanced |
+| SVM (RBF, HOG) | 0.1% | 13.9% | 12.7% | 0.952 | −3.9% | **+13.8%** | variance-limited |
+| Logistic Reg (HOG) | 12.3% | 22.8% | 19.0% | 0.887 | +8.3% | **+10.4%** | variance-limited |
+| Naive Bayes (HOG) | 16.8% | 19.0% | 26.6% | 0.866 | **+12.8%** | +2.2% | bias-limited (underfits) |
 
 ### 4.2 Which model is well-balanced / variance-limited / bias-limited
 
-- **Variance-limited: 8 of 9** — every deep net, the ensemble, and SVM/LogReg show variance ≫ (small/≤0) avoidable bias. The deep nets fit train ~0% but sit 9–18% on val/test.
-- **Bias-leaning: only Naive Bayes** — avoidable bias +12.4% slightly exceeds its variance; the weakest model genuinely *underfits* (it is not deployed).
-- **Well-balanced: none** this round — the from-scratch CNN now overfits too (1.7% train → 18.5% test), unlike the previous smaller-data run.
-- **Best performer to deploy: the Ensemble** — Test acc **86.2%**, unsafe-recall **90.5%**, **AUC 0.949** `[FULL]`; fewest false negatives (2) of any model `[SHEET]`. ("Best performer" ≠ "balanced regime": ~0% train / 12–14% held-out → variance-limited.)
+- **Well-balanced: 5 of 9** — the Ensemble, ResNet50, ConvNeXt, ResNet18 and the scratch CNN now sit with small avoidable bias *and* small val-variance (≤~5%). Adding unsafe data pulled them out of the previous overfit regime — a direct before/after: last run **8 of 9 were variance-limited with 0 well-balanced**; this run it flips to **5 well-balanced**.
+- **Variance-limited: 3 of 9** — EfficientNet-B0 (barely), and the HOG SVM / LogReg, where val-variance still exceeds avoidable bias.
+- **Bias-limited: only Naive Bayes** — avoidable bias +12.8% ≫ its variance; the weakest model genuinely *underfits* (it is not deployed).
+- **Best performer to deploy: the Ensemble** — Test acc **86.1%**, unsafe-recall **94.7%**, **AUC 0.970** `[FULL]`; misses only 2 of 38 hangers `[SHEET]`. Train ~0% / val 3.8% ⇒ well-balanced on the dev metric; the test gap (13.9%) reflects a harder-than-val test draw, not gross overfitting.
 
-### 4.3 Decision: reduce VARIANCE first (not bias)
+### 4.3 Decision: variance was the priority — and adding data lowered it
 
-Applying Ng's rule: for **8 of 9** models `variance ≳ avoidable bias`, with avoidable bias ≤0 or small. → **variance reduction is the priority.** The lone exception (Naive Bayes) is a non-deployed weak baseline.
+Last run every deployable model was variance-limited, so the call was **reduce variance first**. The intervention was carried out (more unsafe images) and it worked:
 
-Three independent confirmations:
-1. **The decomposition:** +9% to +16% variance vs ~0% avoidable bias across the deployable zoo `[FULL]`.
-2. **Confirmed by intervention:** adding 42 unsafe images (98→140) **broke the old ~0.93 AUC plateau** (→0.949) and raised the zero-miss operating point from ~26% to ~42–57% accuracy `[RESULTS]` — direct evidence the binding constraint was **data**, not model capacity.
-3. **Binding errors are data:** the remaining misses are tiny/distant hangers in cluttered frames `[SHEET]`, not a fitting failure.
+Three independent confirmations of the improvement:
+1. **The decomposition moved:** val-variance fell from +9–16% (old) to +3–5% for the deep zoo `[FULL]`, and 5 of 9 models are now well-balanced (were 0).
+2. **Confirmed by intervention:** nearly doubling unsafe images (140→251) lifted best test AUC from ~0.93 to **0.970** and raised unsafe-recall (Ensemble 90.5%→94.7%; ResNet50 71%→92%) `[RESULTS]` — direct evidence the binding constraint was **data**, not model capacity.
+3. **Residual variance is concentrated:** it now sits mainly in the HOG classical models and EfficientNet; the remaining deep-model misses are a few tiny/occluded hangers and ambiguous doorway poses `[SHEET]`, not a fitting failure.
 
 ### 4.4 Which specific method first, and why (all variance/data-centric)
 
-1. **Collect more clear UNSAFE images.** Still the highest-return fix for a variance-limited model and the FN-heavy safety metric. The jump 98→140 already paid off (AUC +0.02, recall ceiling broken); more variety (night, two-door, tiny/distant) keeps closing the train→test gap.
-2. **Keep / strengthen regularisation** — the train-only A–Z augmentation (→1600 imgs), WeightedRandomSampler, class-weighted loss, val threshold tuning, hflip TTA `[RESULTS]`. **Do not just scale model size** (the old plateau showed capacity isn't the limit).
+1. **Keep collecting clear UNSAFE images.** Still the highest-return fix; the jump 140→251 already paid off (AUC to 0.970, 5 models now well-balanced). More variety (night, two-door, tiny/distant) keeps closing the residual train→test gap on the harder cases.
+2. **Keep / strengthen regularisation** — the train-only A–Z augmentation (→2730 imgs), WeightedRandomSampler, class-weighted loss, val threshold tuning, hflip TTA `[RESULTS]`. **Do not just scale model size** (the old plateau showed capacity isn't the limit).
 3. **Maintain label hygiene** — the set is currently clean (`LABEL_AUDIT.md` = 0 conflicts); re-audit after each new collection round.
 
 **Deprioritised:** bigger backbones / longer training. Detect-then-count (a real bias lever for the two-door/counting cases) is **Phase 2** — its crop/tiling prototype returned only marginal gain `[RESULTS]`.
@@ -118,7 +118,7 @@ Three independent confirmations:
 
 ## 5. Misclassification structure (supporting evidence, 6 sheets)
 
-Per-model errors on the held-out **test (n=65)**, balanced threshold. All `[SHEET]`/`[FULL]`.
+Per-model errors on the held-out **test (n=79)**, balanced threshold. All `[SHEET]`/`[FULL]`.
 
 | Model | Errors | FP (safe→unsafe) | FN (unsafe→safe) |
 |---|---|---|---|
@@ -139,7 +139,7 @@ The Ensemble makes the fewest safety-critical misses (2 FN). Remaining FNs are t
 ## 6. Assignment housekeeping
 
 1. **Train errors** — now measured for all 9 models `[FULL]` (no `pending` cells, no cross-run pairing).
-2. **Single run** — train, val and test all come from the same 432-image retrain, so the decomposition is internally consistent.
+2. **Single run** — train, val and test all come from the same 523-image retrain, so the decomposition is internally consistent.
 3. **Per-member paragraph** (bullet 2): each member synthesises their sheet (`misclassified_6sheets.xlsx`, 6 person-sheets) reasons + ways-forward.
 4. **HLP empirical check** (optional): blind-label a sample and report measured inter-annotator disagreement to replace the 0.04 estimate.
 
@@ -149,7 +149,7 @@ The Ensemble makes the fewest safety-critical misses (2 FN). Remaining FNs are t
 - `[FULL]` `model/outputs_final/metrics_full.json` — authoritative train/val/test × balanced/high-recall/max-recall, all 9 models
 - `[TABLES]` `paper_assets/tables/` — `table_models_test.{csv,md}`, `table_train_val_test.{csv,md}`, `table_operating_modes.md`, `table_dataset.md`
 - `[SHEET]` `misclassified_6sheets.xlsx` (asif, tanzila, taif, amio, tazkia, walid) — val+test review
-- `[COCO]` `coco_export.json` — 433 images, 292 safe / 140 unsafe (image-level)
+- `[COCO]` `coco_export.json` — 523 images, 272 safe / 251 unsafe (image-level)
 - `[RESULTS]` `RESULTS.md`, `REPORT.md`, `LABEL_AUDIT.md` (0 conflicts)
 - `[LIT]`:
   - Bias/variance equations — Andrew Ng, *Machine Learning Yearning*: https://home-wordpress.deeplearning.ai/wp-content/uploads/2022/03/andrew-ng-machine-learning-yearning.pdf

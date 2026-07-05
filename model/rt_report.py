@@ -12,16 +12,16 @@ def row(vals):
 
 
 def pct(x):
-    return "—" if x is None else f"{100*x:.1f}%"
+    return "n/a" if x is None else f"{100*x:.1f}%"
 
 
 def f3(x):
-    return "—" if x is None else f"{x:.3f}"
+    return "n/a" if x is None else f"{x:.3f}"
 
 
 lines = []
 A = lines.append
-A("# Safe / Unsafe (Hanging-Passenger) Classifier — Retrained Results")
+A("# Safe / Unsafe (Hanging-Passenger) Classifier: Retrained Results")
 A("")
 A("Binary image classification: passengers hanging on **bus / leguna** doors "
   "(`unsafe`) vs not (`safe`). Dhaka road-safety task.")
@@ -39,15 +39,15 @@ A(f"- Split strategy: {d['split_strategy']}")
 A(f"- **Train**: {d['train_total']} images = {d['train_originals']} originals + "
   f"**{d['train_augmented_copies']} offline augmentations** "
   f"(safe {d['split_counts']['train']['0']} / unsafe {d['split_counts']['train']['1']}, balanced)")
-A(f"- **Val**: {d['val_total']} (safe {d['split_counts']['val']['0']} / unsafe {d['split_counts']['val']['1']}) — real originals only")
-A(f"- **Test**: {d['test_total']} (safe {d['split_counts']['test']['0']} / unsafe {d['split_counts']['test']['1']}) — untouched holdout, real originals only")
+A(f"- **Val**: {d['val_total']} (safe {d['split_counts']['val']['0']} / unsafe {d['split_counts']['val']['1']}), real originals only")
+A(f"- **Test**: {d['test_total']} (safe {d['split_counts']['test']['0']} / unsafe {d['split_counts']['test']['1']}), untouched holdout, real originals only")
 A("- Val & Test are 4-way stratified so each contains every category (bus-safe, bus-unsafe, legua-safe, legua-unsafe).")
 A("- Augmentation is applied to **TRAIN only** → no data leakage.")
 A("")
 
 order = list(models)
 
-A("## 1. Main results — BALANCED operating point (max accuracy)")
+A("## 1. Main results: BALANCED operating point (max accuracy)")
 A("")
 A(row(["Model", "Train acc", "Val acc", "Test acc", "Test recall (unsafe)",
        "Test prec (unsafe)", "Test F1 (unsafe)", "Test ROC-AUC", "Test PR-AUC", "Test MCC"]))
@@ -60,7 +60,7 @@ for name in order:
            f3(te["roc_auc"]), f3(te["pr_auc"]), f3(te["mcc"])]))
 A("")
 
-A("## 2. HIGH-RECALL operating point (catch >=95% of unsafe — safety default)")
+A("## 2. HIGH-RECALL operating point (catch >=95% of unsafe, safety default)")
 A("")
 A(row(["Model", "Test acc", "Test recall (unsafe)", "Test precision (unsafe)", "Test specificity"]))
 A(row(["---"]*5))

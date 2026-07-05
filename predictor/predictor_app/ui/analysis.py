@@ -16,6 +16,10 @@ from . import charts
 from ..metrics import ModelDiagnosis, load_metrics, model_diagnoses
 
 
+# set by render_analysis_page() so helper tables can read the raw model dicts
+_MODELS_RAW: Optional[list] = None
+
+
 def _show(fig) -> None:
     """Render a Matplotlib figure full-width, then free it."""
     st.pyplot(fig, width="stretch")
@@ -56,7 +60,8 @@ def _render_human_level(hl: dict) -> None:
         st.markdown(hl.get("why_not_zero", "—"))
 
 
-def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> None:
+def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float,
+                          val_n: int, test_n: int) -> None:
     st.markdown("### 📉 Avoidable Bias & Variance (per model)")
     st.markdown(
         '<p class="pp-legend"><b>All values are error rates (1 − accuracy) — '
@@ -65,10 +70,12 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
         "held-out − train; a large value ⇒ overfitting / needs more data.</p>",
         unsafe_allow_html=True,
     )
+    one = 100.0 / test_n if test_n else 1.5
     st.caption(
-        "Variance is read from the **Val (n=65)** column (validation was used for threshold "
-        "tuning + model selection, so it leans slightly optimistic); the **Test (n=65)** "
-        "column is the untouched hold-out cross-check. With 65 images per split, one image ≈ 1.5%."
+        f"Variance is read from the **Val (n={val_n})** column (validation was used for threshold "
+        f"tuning + model selection, so it leans slightly optimistic); the **Test (n={test_n})** "
+        f"column is the untouched hold-out cross-check. With ~{test_n} images per split, "
+        f"one image ≈ {one:.1f}%."
     )
 
     rows = []
@@ -93,7 +100,7 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
         '<th class="lft grpsep" rowspan="2">Diagnosis</th>'
         '</tr>'
         '<tr class="sub">'
-        '<th class="grpsep">Train</th><th>Val (n=65)</th><th>Test (n=65)</th>'
+        f'<th class="grpsep">Train</th><th>Val (n={val_n})</th><th>Test (n={test_n})</th>'
         '<th class="grpsep">Avoidable bias</th><th>Variance</th>'
         '</tr></thead><tbody>'
         + "".join(rows)
@@ -121,18 +128,20 @@ def _render_bias_variance(diags: list[ModelDiagnosis], human_error: float) -> No
     _show(charts.bias_variance_dumbbell(items, human_error))
 
 
-def _render_performance(diags: list[ModelDiagnosis]) -> None:
+def _render_performance(diags: list[ModelDiagnosis], val_n: int, test_n: int,
+                        imbalance: str) -> None:
     st.markdown("### 📊 Model performance")
     st.markdown(
         '<p class="pp-legend"><b>All values are scores — higher is better.</b> '
         "Accuracy and unsafe-class recall are percentages; AUC is the 0–1 ROC area. "
-        "For this 2.1:1-imbalanced safety task, <b>unsafe-recall</b> matters most.</p>",
+        f"For this {_html.escape(imbalance)}-imbalanced safety task, <b>unsafe-recall</b> "
+        "matters most.</p>",
         unsafe_allow_html=True,
     )
     st.caption(
-        "**Val (n=65)** = the validation split used for threshold tuning + model selection, "
-        "so it leans slightly optimistic. **Test (n=65)** = the untouched hold-out — the "
-        "honest cross-check. With 65 images per split, one image ≈ 1.5%."
+        f"**Val (n={val_n})** = the validation split used for threshold tuning + model selection, "
+        f"so it leans slightly optimistic. **Test (n={test_n})** = the untouched hold-out — the "
+        f"honest cross-check."
     )
 
     rows = []
@@ -153,14 +162,30 @@ def _render_performance(diags: list[ModelDiagnosis]) -> None:
         '<th class="grpsep" colspan="2">AUC</th>'
         '</tr>'
         '<tr class="sub">'
-        '<th class="grpsep">Val (n=65)</th><th>Test (n=65)</th>'
-        '<th class="grpsep">Val (n=65)</th><th>Test (n=65)</th>'
-        '<th class="grpsep">Val (n=65)</th><th>Test (n=65)</th>'
+        f'<th class="grpsep">Val (n={val_n})</th><th>Test (n={test_n})</th>'
+        f'<th class="grpsep">Val (n={val_n})</th><th>Test (n={test_n})</th>'
+        f'<th class="grpsep">Val (n={val_n})</th><th>Test (n={test_n})</th>'
         '</tr></thead><tbody>'
         + "".join(rows)
         + "</tbody></table></div>"
     )
     st.markdown(table, unsafe_allow_html=True)
+
+    # Advanced held-out TEST metrics (precision / F1 / PR-AUC / MCC / specificity)
+    adv = [m for m in (_MODELS_RAW or []) if m.get("test_pr_auc") is not None]
+    if adv:
+        with st.expander("Advanced held-out TEST metrics (precision · F1 · PR-AUC · MCC · specificity)"):
+            arows = []
+            for m in adv:
+                arows.append([
+                    m["name"], _pct(m.get("test_precision_unsafe")), _pct(m.get("test_f1_unsafe"), 1),
+                    _auc(m.get("test_pr_auc")), f'{m.get("test_mcc", 0):.3f}',
+                    _pct(m.get("test_specificity")),
+                ])
+            st.markdown(_md_table(
+                ["Model", "Precision (unsafe)", "F1 (unsafe)", "PR-AUC", "MCC", "Specificity"], arows))
+            st.caption("Precision/F1 are for the unsafe class; PR-AUC and MCC are robust to imbalance; "
+                       "specificity = safe-class recall. All on the untouched test set.")
 
 
 def _render_error_analysis(ea: dict) -> None:
@@ -214,10 +239,47 @@ def _render_auc_plateau(ap: dict) -> None:
     st.caption(
         "Ng's plateau test: if stacking stronger techniques no longer moves the curve, "
         "more of the *same kind of effort* won't reach the goal. The old ~0.93 AUC "
-        "plateau was **broken by adding unsafe data** (98→140 images → AUC 0.949), "
+        "plateau was **broken by adding unsafe data** (unsafe 98→251 → AUC 0.97+), "
         "confirming the binding constraint was **data**, not model capacity."
     )
     _show(charts.auc_plateau(points, ap.get("ceiling", 0.95)))
+
+
+def _render_dataset_detail(sd: dict) -> None:
+    st.markdown("### 🧬 Dataset & split (leak-free)")
+    sc = sd.get("split_counts", {})
+
+    def _cell(split):
+        c = sc.get(split, {})
+        safe = c.get("0", c.get(0, "—")); unsafe = c.get("1", c.get(1, "—"))
+        return safe, unsafe
+
+    tr_s, tr_u = _cell("train"); va_s, va_u = _cell("val"); te_s, te_u = _cell("test")
+    rows = [
+        ["Train (augmented)", sd.get("train_total", "—"), tr_s, tr_u],
+        ["Train (originals)", sd.get("train_originals", "—"), "—", "—"],
+        ["Val", sd.get("val_total", "—"), va_s, va_u],
+        ["Test", sd.get("test_total", "—"), te_s, te_u],
+    ]
+    st.markdown(_md_table(["Split", "Images", "Safe", "Unsafe"],
+                          [[str(x) for x in r] for r in rows]))
+    aug = sd.get("train_augmented_copies")
+    if aug is not None:
+        st.caption(f"**{aug} augmented copies** added to TRAIN only. {sd.get('note', '')}")
+
+
+def _render_ensemble(ens: dict, op: dict) -> None:
+    st.markdown("### 🧩 Deployed ensemble & operating modes")
+    members = ", ".join(m.replace(".joblib", "") for m in ens.get("members", []))
+    st.markdown(f"**Ensemble = {members}**  ·  {ens.get('method', '')}")
+    modes = op.get("modes", [])
+    if modes:
+        rows = [[m["mode"], f'{m["threshold"]:.3f}', _pct(m["unsafe_recall"]),
+                 _pct(m["accuracy"]), _pct(m.get("precision_unsafe"))] for m in modes]
+        st.markdown(_md_table(
+            ["Mode", "Threshold", "Unsafe-recall", "Accuracy", "Precision (unsafe)"], rows))
+        st.caption(op.get("_note", "") +
+                   f"  Default deployed mode: **{op.get('default_deployed', 'high_recall')}**.")
 
 
 def _render_diagnosis(dg: dict) -> None:
@@ -236,6 +298,9 @@ def render_analysis_page() -> None:
         )
         return
 
+    global _MODELS_RAW
+    _MODELS_RAW = data.get("models")
+
     task = data.get("task", {})
     st.markdown(f"## {task.get('name', 'Model Analysis')}")
     if task.get("description"):
@@ -250,21 +315,36 @@ def render_analysis_page() -> None:
     c2.metric("Safe", task.get("n_safe", "—"))
     c3.metric("Unsafe", task.get("n_unsafe", "—"))
     c4.metric("Majority baseline", _pct(task.get("majority_baseline_accuracy")))
+    if task.get("split"):
+        st.caption(f"**Split:** {task['split']}")
     if task.get("primary_metric_note"):
         st.info(task["primary_metric_note"])
+
+    sizes = data.get("eval_sizes", {})
+    val_n = int(sizes.get("val", 65))
+    test_n = int(sizes.get("test", 65))
+    imbalance = task.get("imbalance", "imbalanced")
 
     diags = model_diagnoses(data)
     human_error = float(data.get("human_level", {}).get("error", 0.04))
 
     st.divider()
+    if "split_detail" in data:
+        _render_dataset_detail(data["split_detail"])
+        st.divider()
+
     if "human_level" in data:
         _render_human_level(data["human_level"])
         st.divider()
 
     if diags:
-        _render_performance(diags)
+        _render_performance(diags, val_n, test_n, imbalance)
         st.divider()
-        _render_bias_variance(diags, human_error)
+        _render_bias_variance(diags, human_error, val_n, test_n)
+        st.divider()
+
+    if "ensemble" in data and "operating_points" in data:
+        _render_ensemble(data["ensemble"], data["operating_points"])
         st.divider()
 
     if "error_analysis" in data:

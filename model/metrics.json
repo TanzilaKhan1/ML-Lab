@@ -1,222 +1,330 @@
 {
  "_README": "App Analysis-page metrics. Regenerate with `python model/rt_app_metrics.py` after a retrain; commit predictor/model/metrics.json and reboot the app.",
- "generated": "regenerated 2026-06-30 from the 432-image retrain (model/outputs_final/metrics_full.json); train/val/test errors from rt_finalize_eval.py. Re-run model/rt_app_metrics.py to refresh.",
+ "generated": "regenerated from the 523-image retrain (model/outputs_final/metrics_full.json); train/val/test errors from rt_finalize_eval.py. Re-run model/rt_app_metrics.py to refresh.",
  "task": {
   "name": "Door-Hanging Safety Classifier",
   "description": "Binary image classification: is a passenger hanging on the door of a bus/leguna (unsafe) or not (safe)?",
-  "n_images": 432,
-  "n_safe": 292,
-  "n_unsafe": 140,
-  "imbalance": "2.1:1 (safe:unsafe)",
-  "split": "70/15/15 stratified by vehicle x class (train 302 originals -> 1600 after train-only A-Z augmentation / val 65 / test 65). Val & test are real originals - no leakage.",
-  "majority_baseline_accuracy": 0.6759,
-  "primary_metric_note": "Because data is imbalanced 2.1:1, watch UNSAFE-RECALL (catching violations), not just accuracy. An 'always safe' model already scores 67.6% accuracy while catching 0 violations."
+  "n_images": 523,
+  "n_safe": 272,
+  "n_unsafe": 251,
+  "imbalance": "1.08:1 (safe:unsafe)",
+  "split": "70/15/15 stratified by vehicle x class (train 365 originals -> 2730 after train-only A-Z augmentation / val 79 / test 79). Val & test are real originals - no leakage.",
+  "majority_baseline_accuracy": 0.5201,
+  "primary_metric_note": "Data is imbalanced 1.08:1, so watch UNSAFE-RECALL (catching violations), not just accuracy. An 'always safe' model already scores 52.0% accuracy while catching 0 violations."
+ },
+ "split_detail": {
+  "train_total": 2730,
+  "train_originals": 365,
+  "train_augmented_copies": 2365,
+  "val_total": 79,
+  "test_total": 79,
+  "split_counts": {
+   "train": {
+    "0": 1330,
+    "1": 1400
+   },
+   "val": {
+    "0": 41,
+    "1": 38
+   },
+   "test": {
+    "0": 41,
+    "1": 38
+   }
+  },
+  "note": "Augmentation (A-Z: flips, affine, perspective, crops, colour, blur, noise, compression, dropout, weather) is applied to TRAIN ONLY. Augmented copies are grouped to their source image so they never cross into val/test."
+ },
+ "eval_sizes": {
+  "val": 79,
+  "test": 79
+ },
+ "ensemble": {
+  "members": [
+   "resnet50.joblib",
+   "convnext_tiny.joblib"
+  ],
+  "method": "soft vote (average of member P(unsafe)); each member uses hflip TTA"
+ },
+ "operating_points": {
+  "_note": "The deployed Ensemble ships 3 thresholds, selectable via the PREDICTOR_OP_MODE env var. Higher recall = fewer missed hangers, more false alarms.",
+  "default_deployed": "high_recall",
+  "modes": [
+   {
+    "mode": "balanced",
+    "threshold": 0.17,
+    "accuracy": 0.8608,
+    "unsafe_recall": 0.9474,
+    "safe_recall": 0.7805,
+    "precision_unsafe": 0.8
+   },
+   {
+    "mode": "high_recall",
+    "threshold": 0.175,
+    "accuracy": 0.8608,
+    "unsafe_recall": 0.9474,
+    "safe_recall": 0.7805,
+    "precision_unsafe": 0.8
+   },
+   {
+    "mode": "max_recall",
+    "threshold": 0.175,
+    "accuracy": 0.8608,
+    "unsafe_recall": 0.9474,
+    "safe_recall": 0.7805,
+    "precision_unsafe": 0.8
+   }
+  ]
  },
  "human_level": {
   "error": 0.04,
   "accuracy": 0.96,
   "definition": "Careful expert reviewing the full-resolution image (can zoom). Used as the Bayes-error proxy.",
   "why_not_zero": "Tiny / distant hangers occupy only 1-8% of a cluttered frame; some borderline poses are genuinely ambiguous (a passenger leaning vs hanging); and inter-annotator agreement on subjective safety labels is only ~0.70-0.85. So neither a human nor a model reaches 0% error.",
-  "sota": "Controlled bus boarding/posture detection reaches 96-98% (MDPI Sensors 2026; MDPI Appl. Sci. 2025); real-world clutter drops naive systems to 72-75%; inter-annotator agreement for subjective safety labels is ~0.70-0.85 (Claru; PaSBench-Video). => clear images ~97-98%, borderline subset ~80-85%, blended ~96%."
+  "sota": "Controlled bus boarding/posture detection reaches 96-98% (MDPI Sensors 2026; MDPI Appl. Sci. 2025); real-world clutter drops naive systems to 72-75%; inter-annotator agreement for subjective safety labels is ~0.70-0.85. => clear images ~97-98%, borderline subset ~80-85%, blended ~96%."
  },
  "models": [
   {
    "name": "Ensemble (best)",
    "family": "deep",
-   "accuracy": 0.8769,
-   "unsafe_recall": 0.8095,
-   "safe_recall": 0.9091,
-   "auc": 0.8777,
-   "test_accuracy": 0.8615,
-   "test_unsafe_recall": 0.9048,
-   "test_auc": 0.9491,
-   "train_error": 0.0044,
-   "dev_error": 0.1231,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.1385,
+   "accuracy": 0.962,
+   "unsafe_recall": 1.0,
+   "safe_recall": 0.9268,
+   "auc": 0.9923,
+   "test_accuracy": 0.8608,
+   "test_unsafe_recall": 0.9474,
+   "test_auc": 0.9705,
+   "test_precision_unsafe": 0.8,
+   "test_f1_unsafe": 0.8675,
+   "test_pr_auc": 0.9782,
+   "test_mcc": 0.7345,
+   "test_specificity": 0.7805,
+   "train_error": 0.0015,
+   "dev_error": 0.038,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.1392,
    "val_contaminated": false
   },
   {
    "name": "ResNet50",
    "family": "deep",
-   "accuracy": 0.9077,
-   "unsafe_recall": 0.7143,
-   "safe_recall": 1.0,
-   "auc": 0.8831,
-   "test_accuracy": 0.8462,
-   "test_unsafe_recall": 0.7143,
-   "test_auc": 0.9426,
-   "train_error": 0.0038,
-   "dev_error": 0.0923,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.1538,
+   "accuracy": 0.962,
+   "unsafe_recall": 0.9474,
+   "safe_recall": 0.9756,
+   "auc": 0.9769,
+   "test_accuracy": 0.9241,
+   "test_unsafe_recall": 0.9211,
+   "test_auc": 0.9673,
+   "test_precision_unsafe": 0.9211,
+   "test_f1_unsafe": 0.9211,
+   "test_pr_auc": 0.9753,
+   "test_mcc": 0.8479,
+   "test_specificity": 0.9268,
+   "train_error": 0.0029,
+   "dev_error": 0.038,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.0759,
    "val_contaminated": false
   },
   {
    "name": "ConvNeXt-Tiny",
    "family": "deep",
-   "accuracy": 0.8769,
-   "unsafe_recall": 0.8095,
-   "safe_recall": 0.9091,
-   "auc": 0.8907,
-   "test_accuracy": 0.8154,
-   "test_unsafe_recall": 0.8571,
-   "test_auc": 0.9437,
-   "train_error": 0.0006,
-   "dev_error": 0.1231,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.1846,
+   "accuracy": 0.962,
+   "unsafe_recall": 1.0,
+   "safe_recall": 0.9268,
+   "auc": 0.9891,
+   "test_accuracy": 0.8354,
+   "test_unsafe_recall": 0.9474,
+   "test_auc": 0.9724,
+   "test_precision_unsafe": 0.766,
+   "test_f1_unsafe": 0.8471,
+   "test_pr_auc": 0.9795,
+   "test_mcc": 0.6912,
+   "test_specificity": 0.7317,
+   "train_error": 0.0,
+   "dev_error": 0.038,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.1646,
    "val_contaminated": false
   },
   {
    "name": "EfficientNet-B0",
    "family": "deep",
-   "accuracy": 0.8154,
-   "unsafe_recall": 0.9048,
-   "safe_recall": 0.7727,
-   "auc": 0.8864,
-   "test_accuracy": 0.7692,
-   "test_unsafe_recall": 0.8571,
-   "test_auc": 0.9091,
-   "train_error": 0.0238,
-   "dev_error": 0.1846,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.2308,
+   "accuracy": 0.9367,
+   "unsafe_recall": 1.0,
+   "safe_recall": 0.878,
+   "auc": 0.9814,
+   "test_accuracy": 0.8354,
+   "test_unsafe_recall": 0.9737,
+   "test_auc": 0.9795,
+   "test_precision_unsafe": 0.7551,
+   "test_f1_unsafe": 0.8506,
+   "test_pr_auc": 0.9803,
+   "test_mcc": 0.7011,
+   "test_specificity": 0.7073,
+   "train_error": 0.0106,
+   "dev_error": 0.0633,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.1646,
    "val_contaminated": false
   },
   {
    "name": "ResNet18",
    "family": "deep",
-   "accuracy": 0.8923,
-   "unsafe_recall": 0.7619,
-   "safe_recall": 0.9545,
-   "auc": 0.908,
-   "test_accuracy": 0.8308,
-   "test_unsafe_recall": 0.7619,
-   "test_auc": 0.8918,
-   "train_error": 0.0006,
-   "dev_error": 0.1077,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.1692,
+   "accuracy": 0.9494,
+   "unsafe_recall": 0.9474,
+   "safe_recall": 0.9512,
+   "auc": 0.973,
+   "test_accuracy": 0.9114,
+   "test_unsafe_recall": 0.9211,
+   "test_auc": 0.9711,
+   "test_precision_unsafe": 0.8974,
+   "test_f1_unsafe": 0.9091,
+   "test_pr_auc": 0.9761,
+   "test_mcc": 0.823,
+   "test_specificity": 0.9024,
+   "train_error": 0.0037,
+   "dev_error": 0.0506,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.0886,
    "val_contaminated": false
   },
   {
    "name": "CNN",
    "family": "deep",
-   "accuracy": 0.8923,
-   "unsafe_recall": 0.7619,
-   "safe_recall": 0.9545,
-   "auc": 0.8885,
-   "test_accuracy": 0.8154,
-   "test_unsafe_recall": 0.6667,
-   "test_auc": 0.8658,
-   "train_error": 0.0169,
-   "dev_error": 0.1077,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.1846,
+   "accuracy": 0.9367,
+   "unsafe_recall": 0.9211,
+   "safe_recall": 0.9512,
+   "auc": 0.9763,
+   "test_accuracy": 0.8608,
+   "test_unsafe_recall": 0.8684,
+   "test_auc": 0.9294,
+   "test_precision_unsafe": 0.8462,
+   "test_f1_unsafe": 0.8571,
+   "test_pr_auc": 0.8962,
+   "test_mcc": 0.7216,
+   "test_specificity": 0.8537,
+   "train_error": 0.0385,
+   "dev_error": 0.0633,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.1392,
    "val_contaminated": false
   },
   {
    "name": "SVM (RBF)",
    "family": "classical",
-   "accuracy": 0.8308,
-   "unsafe_recall": 0.7619,
-   "safe_recall": 0.8636,
-   "auc": 0.8766,
-   "test_accuracy": 0.8462,
-   "test_unsafe_recall": 0.7619,
-   "test_auc": 0.8626,
-   "train_error": 0.0406,
-   "dev_error": 0.1692,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.1538,
+   "accuracy": 0.8608,
+   "unsafe_recall": 0.8421,
+   "safe_recall": 0.878,
+   "auc": 0.9178,
+   "test_accuracy": 0.8734,
+   "test_unsafe_recall": 0.8947,
+   "test_auc": 0.9519,
+   "test_precision_unsafe": 0.85,
+   "test_f1_unsafe": 0.8718,
+   "test_pr_auc": 0.9575,
+   "test_mcc": 0.7479,
+   "test_specificity": 0.8537,
+   "train_error": 0.0011,
+   "dev_error": 0.1392,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.1266,
    "val_contaminated": false
   },
   {
    "name": "Logistic Regression",
    "family": "classical",
-   "accuracy": 0.8154,
-   "unsafe_recall": 0.6667,
-   "safe_recall": 0.8864,
-   "auc": 0.8182,
-   "test_accuracy": 0.7846,
-   "test_unsafe_recall": 0.6667,
-   "test_auc": 0.7998,
-   "train_error": 0.0769,
-   "dev_error": 0.1846,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.2154,
+   "accuracy": 0.7722,
+   "unsafe_recall": 0.7368,
+   "safe_recall": 0.8049,
+   "auc": 0.8074,
+   "test_accuracy": 0.8101,
+   "test_unsafe_recall": 0.8158,
+   "test_auc": 0.887,
+   "test_precision_unsafe": 0.7949,
+   "test_f1_unsafe": 0.8052,
+   "test_pr_auc": 0.9003,
+   "test_mcc": 0.6203,
+   "test_specificity": 0.8049,
+   "train_error": 0.1234,
+   "dev_error": 0.2278,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.1899,
    "val_contaminated": false
   },
   {
    "name": "Naive Bayes",
    "family": "classical",
-   "accuracy": 0.7385,
-   "unsafe_recall": 0.8095,
-   "safe_recall": 0.7045,
-   "auc": 0.7987,
-   "test_accuracy": 0.6769,
-   "test_unsafe_recall": 0.4286,
-   "test_auc": 0.6461,
-   "train_error": 0.1637,
-   "dev_error": 0.2615,
-   "dev_method": "Val (n=65)",
-   "test_error": 0.3231,
+   "accuracy": 0.8101,
+   "unsafe_recall": 0.7632,
+   "safe_recall": 0.8537,
+   "auc": 0.844,
+   "test_accuracy": 0.7342,
+   "test_unsafe_recall": 0.7368,
+   "test_auc": 0.8665,
+   "test_precision_unsafe": 0.7179,
+   "test_f1_unsafe": 0.7273,
+   "test_pr_auc": 0.8836,
+   "test_mcc": 0.4682,
+   "test_specificity": 0.7317,
+   "train_error": 0.1678,
+   "dev_error": 0.1899,
+   "dev_method": "Val (n=79)",
+   "test_error": 0.2658,
    "val_contaminated": false
   }
  ],
  "error_analysis": {
   "model": "Ensemble (best)",
-  "summary": "On the untouched 65-image test set the Ensemble makes 9 errors (2 missed-unsafe + 7 false-alarms) at the balanced operating point. Misses are tiny/distant hangers; the linear/HOG models make many more errors, confirming the deep features help.",
+  "summary": "On the untouched 79-image test set the Ensemble makes 11 errors (2 missed-unsafe + 9 false-alarms) at the balanced operating point. Misses are tiny/distant hangers or ambiguous boarding poses; the linear/HOG models make many more errors, confirming the deep features help.",
   "image_base_url": "https://ml-lab-bmiv.onrender.com",
   "per_model_counts": {
-   "_note": "Per-model errors on the held-out TEST (n=65), balanced operating point, split into false-positive (safe->unsafe) and false-negative (unsafe->safe, the safety-critical misses).",
-   "pool_size": 65,
+   "_note": "Per-model errors on the held-out TEST (n=79), balanced operating point, split into false-positive (safe->unsafe) and false-negative (unsafe->safe, the safety-critical misses).",
+   "pool_size": 79,
    "models": [
     {
      "model": "Ensemble (best)",
-     "fp": 7,
+     "fp": 9,
      "fn": 2
     },
     {
      "model": "ResNet50",
-     "fp": 4,
-     "fn": 6
+     "fp": 3,
+     "fn": 3
     },
     {
      "model": "ConvNeXt-Tiny",
-     "fp": 9,
-     "fn": 3
+     "fp": 11,
+     "fn": 2
     },
     {
      "model": "EfficientNet-B0",
      "fp": 12,
-     "fn": 3
+     "fn": 1
     },
     {
      "model": "ResNet18",
+     "fp": 4,
+     "fn": 3
+    },
+    {
+     "model": "CNN",
      "fp": 6,
      "fn": 5
     },
     {
-     "model": "CNN",
-     "fp": 5,
-     "fn": 7
-    },
-    {
      "model": "SVM (RBF)",
-     "fp": 5,
-     "fn": 5
+     "fp": 6,
+     "fn": 4
     },
     {
      "model": "Logistic Regression",
-     "fp": 7,
+     "fp": 8,
      "fn": 7
     },
     {
      "model": "Naive Bayes",
-     "fp": 9,
-     "fn": 12
+     "fp": 11,
+     "fn": 10
     }
    ]
   },
@@ -230,12 +338,12 @@
     "examples": [
      {
       "path": "bus/positive/IMG_4018",
-      "unsafe_prob": 0.068,
+      "unsafe_prob": 0.03,
       "note": "missed hanger"
      },
      {
-      "path": "legua/positive/IMG_3823",
-      "unsafe_prob": 0.072,
+      "path": "bus/positive/IMG_4029",
+      "unsafe_prob": 0.1,
       "note": "missed hanger"
      }
     ]
@@ -243,38 +351,38 @@
    {
     "category": "False positives - false alarms",
     "direction": "safe -> model says unsafe",
-    "count": "7",
+    "count": "9",
     "fixable": "Partly - threshold tuning + more varied safe images",
     "ceiling": "Accuracy / precision gain",
     "examples": [
      {
-      "path": "bus/negative/IMG_3939",
-      "unsafe_prob": 0.718,
-      "note": "false alarm"
-     },
-     {
       "path": "bus/negative/IMG_3547",
-      "unsafe_prob": 0.614,
-      "note": "false alarm"
-     },
-     {
-      "path": "legua/negative/IMG_3790",
-      "unsafe_prob": 0.532,
-      "note": "false alarm"
-     },
-     {
-      "path": "bus/negative/IMG_3971",
-      "unsafe_prob": 0.456,
-      "note": "false alarm"
-     },
-     {
-      "path": "bus/negative/IMG_3525",
-      "unsafe_prob": 0.25,
+      "unsafe_prob": 0.644,
       "note": "false alarm"
      },
      {
       "path": "bus/negative/IMG_3596",
-      "unsafe_prob": 0.246,
+      "unsafe_prob": 0.452,
+      "note": "false alarm"
+     },
+     {
+      "path": "bus/negative/IMG_3525",
+      "unsafe_prob": 0.408,
+      "note": "false alarm"
+     },
+     {
+      "path": "bus/negative/IMG_3494",
+      "unsafe_prob": 0.365,
+      "note": "false alarm"
+     },
+     {
+      "path": "bus/negative/IMG_3971",
+      "unsafe_prob": 0.304,
+      "note": "false alarm"
+     },
+     {
+      "path": "bus/negative/IMG_3599",
+      "unsafe_prob": 0.302,
       "note": "false alarm"
      }
     ]
@@ -282,7 +390,7 @@
   ]
  },
  "diagnosis": {
-  "verdict": "Improved by more data - recall ceiling broken; now mild overfitting.",
-  "reasoning": "The expanded set added unsafe images (98 -> 140), which lifted the best ROC-AUC past the old ~0.93 plateau to 0.949 (Ensemble) and raised the zero-miss (100%-unsafe-recall) operating point from ~26% to ~57-69% accuracy. Deep nets still fit train ~0% with a 13-18 pt train->test gap, so the remaining error is variance-leaning - more (and more varied) unsafe images would help further, but the hard data ceiling no longer binds."
+  "verdict": "More (and more balanced) data lowered variance and lifted recall.",
+  "reasoning": "The set grew to 523 images with unsafe nearly doubled (272 safe / 251 unsafe, 1.08:1), so the classes are now close to balanced. Best test ROC-AUC rose to 0.979 (past the old ~0.93 plateau) and the recall-priority operating point reaches 95% unsafe-recall at 86% accuracy. The overfit gap shrank for most backbones (e.g. ResNet50 test error roughly halved) and per-model AUC improved across the board, so the model is less variance-limited than before. Remaining errors are a few tiny/occluded hangers and genuinely ambiguous doorway poses."
  }
 }
