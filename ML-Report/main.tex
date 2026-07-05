@@ -17,6 +17,18 @@
 \DeclareMathOperator*{\argmax}{arg\,max}
 \DeclareMathOperator{\sgn}{sgn}
 
+% Float placement: pack large floats with surrounding text and avoid near-empty float pages
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.85}
+\renewcommand{\dbltopfraction}{0.95}
+\renewcommand{\dblfloatpagefraction}{0.85}
+\setcounter{topnumber}{4}
+\setcounter{bottomnumber}{3}
+\setcounter{totalnumber}{6}
+\setcounter{dbltopnumber}{4}
+
 \graphicspath{{./}{./figures/}{./tables/}}
 
 \title{Detection and Risk Assessment of Unsafe Hanging Travel in Public Transport Using Machine Learning}
@@ -49,7 +61,7 @@ The main contributions are as follows:
     \item A localized safe/unsafe public transport image dataset containing Dhaka bus and leguna scenes.
     \item A complete machine-learning pipeline for unsafe hanging-travel detection.
     \item A comparison of HOG-based classical machine-learning models and deep convolutional models.
-    \item An evaluation using standard classification metrics, including accuracy, unsafe-class recall, confusion matrices, ROC and precision--recall curves, and AUC, together with a train/validation/test generalization analysis.
+    \item An evaluation using standard classification metrics, including accuracy, unsafe-class recall, ROC and precision--recall curves, and AUC, together with a train/validation/test generalization analysis.
 \end{itemize}
 
 \section{Related Work}
@@ -261,7 +273,7 @@ so that $p_1$ is the estimated probability of the unsafe class.
 Neural models were trained with the AdamW optimizer, a decoupled weight-decay variant of Adam \cite{kingma2015adam}, under a cosine-annealing learning-rate schedule; the complete training configuration is listed in Table~\ref{tab:model_config}.
 
 \subsection{Evaluation Metrics}
-Evaluation used accuracy, balanced accuracy, precision, recall, specificity, the $F_1$-score, the Matthews correlation coefficient (MCC), confusion matrices, ROC-AUC, and PR-AUC. Because the classes are close to balanced, both ROC-AUC and PR-AUC are reported, and per-class recall is emphasized for the safety-critical unsafe class. Let $TP$, $TN$, $FP$, and $FN$ denote the numbers of true positives, true negatives, false positives, and false negatives, with the positive class corresponding to unsafe/risky hanging travel. The threshold-dependent metrics are then defined as
+Evaluation used accuracy, balanced accuracy, precision, recall, specificity, the $F_1$-score, the Matthews correlation coefficient (MCC), ROC-AUC, and PR-AUC. Because the classes are close to balanced, both ROC-AUC and PR-AUC are reported, and per-class recall is emphasized for the safety-critical unsafe class. Let $TP$, $TN$, $FP$, and $FN$ denote the numbers of true positives, true negatives, false positives, and false negatives, with the positive class corresponding to unsafe/risky hanging travel. The threshold-dependent metrics are then defined as
 \begin{align}
 \mathrm{Accuracy} &= \frac{TP + TN}{TP + TN + FP + FN}, \label{eq:acc}\\[2pt]
 \mathrm{Precision} &= \frac{TP}{TP + FP}, \qquad
@@ -292,7 +304,7 @@ where $P_n$ and $R_n$ are the precision and recall at the $n$-th threshold; its 
 
 \section{Results}
 \subsection{Quantitative Comparison}
-Table~\ref{tab:test_results} reports balanced operating-point performance on the untouched 79-image test set. The ResNet50--ConvNeXt ensemble reaches 0.861 accuracy, 0.947 unsafe recall, and 0.970 ROC-AUC. ResNet50 attains the highest single-model accuracy (0.924) and MCC (0.848), while EfficientNet-B0 attains the highest unsafe recall (0.974) and ROC-AUC (0.979). All nine models are compared in Fig.~\ref{fig:paper_model_comparison} and Fig.~\ref{fig:metric_heatmap}.
+Table~\ref{tab:test_results} reports balanced operating-point performance on the untouched 79-image test set. The ResNet50--ConvNeXt ensemble reaches 0.861 accuracy, 0.947 unsafe recall, and 0.970 ROC-AUC. ResNet50 attains the highest single-model accuracy (0.924) and MCC (0.848), while EfficientNet-B0 attains the highest unsafe recall (0.974) and ROC-AUC (0.979). All nine models are compared in Fig.~\ref{fig:paper_model_comparison}.
 
 \begin{table*}[!t]
 \centering
@@ -326,49 +338,30 @@ Naive Bayes & 0.734 & 0.734 & 0.737 & 0.718 & 0.732 & 0.727 & 0.866 & 0.884 & 0.
     \label{fig:paper_model_comparison}
 \end{figure*}
 
-\begin{figure*}[!t]
-    \centering
-    \includegraphics[width=0.86\textwidth]{figures/fig09_metric_heatmap.png}
-    \caption{Heatmap of held-out test metrics for all nine models at the balanced operating point.}
-    \label{fig:metric_heatmap}
-\end{figure*}
-
-\subsection{Confusion Matrix Analysis}
-The confusion matrices in Fig.~\ref{fig:paper_confusion_matrices} report class-level outcomes for all nine models on the held-out test set. The rows show true labels and the columns show predicted labels, with safe representing normal passenger conditions and unsafe representing door-hanging risk.
-
-\begin{figure*}[p]
-    \centering
-    \includegraphics[width=\textwidth]{figures/fig05_confusion_matrices.png}
-    \caption{Confusion-matrix grid for all nine reported models on the held-out test set.}
-    \label{fig:paper_confusion_matrices}
-\end{figure*}
-
 \subsection{ROC and AUC Analysis}
-AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_roc_test} shows held-out ROC curves for all reported models, while Fig.~\ref{fig:paper_pr_curves} shows the corresponding precision--recall curves and Fig.~\ref{fig:per_class_recall} reports safe- and unsafe-class recall at the balanced operating point.
+AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_roc_test} shows held-out ROC curves for all reported models, and Fig.~\ref{fig:paper_pr_curves} shows the corresponding precision--recall curves.
 
-\begin{figure*}[!t]
+\begin{figure*}[t]
     \centering
-    \subfloat[Safe- and unsafe-class recall at the balanced operating point.\label{fig:per_class_recall}]{%
-        \includegraphics[width=0.64\textwidth]{figures/fig12_per_class_recall.png}}
-    \par\medskip
     \subfloat[ROC curves.\label{fig:paper_roc_test}]{%
-        \includegraphics[width=0.48\textwidth]{figures/fig03_roc_test.png}}
+        \includegraphics[width=0.49\textwidth]{figures/fig03_roc_test.png}}
     \hfill
     \subfloat[Precision--recall curves.\label{fig:paper_pr_curves}]{%
-        \includegraphics[width=0.48\textwidth]{figures/fig04_pr_curves.png}}
-    \caption{Class-wise recall and discrimination curves for all nine models on the held-out test set.}
+        \includegraphics[width=0.49\textwidth]{figures/fig04_pr_curves.png}}
+    \caption{Receiver operating characteristic and precision--recall curves for all nine models on the held-out test set.}
     \label{fig:classwise_curve_analysis}
 \end{figure*}
 
 \subsection{Error Analysis}
 False negatives are the most safety-critical error type because they correspond to unsafe/risky hanging-travel cases predicted as safe/normal. At the balanced operating point, the ensemble detects 94.7\% of unsafe test images, missing only 2 of 38 hangers. Because the retrained dataset is close to balanced, the tuned balanced, high-recall, and max-recall thresholds fall within 0.006 of one another, so all three settle at the same operating point of 86.1\% accuracy and 94.7\% unsafe recall. The earlier regime, in which perfect recall could only be bought at low accuracy, no longer appears: the additional unsafe training data lets the ensemble reach high recall without sacrificing accuracy. Table~\ref{tab:operating_modes} lists the three modes, and Fig.~\ref{fig:operating_analysis} shows the threshold trade-off.
 
-\begin{table*}[!t]
+\begin{table}[t]
 \centering
 \caption{Selectable operating points for the deployed ensemble. On the near-balanced retrained data the three tuned thresholds nearly coincide, so the modes report the same test operating point.}
 \label{tab:operating_modes}
 \footnotesize
-\setlength{\tabcolsep}{7pt}
+\setlength{\tabcolsep}{4pt}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lccccc}
 \toprule
 \textbf{Mode} & \textbf{Threshold} & \textbf{Test Acc.} & \textbf{Unsafe R} & \textbf{Unsafe P} & \textbf{Spec.} \\
@@ -378,7 +371,8 @@ High recall & 0.175 & 0.861 & 0.947 & 0.800 & 0.780 \\
 Max recall & 0.175 & 0.861 & 0.947 & 0.800 & 0.780 \\
 \bottomrule
 \end{tabular}
-\end{table*}
+}
+\end{table}
 
 \begin{figure}[!t]
     \centering
@@ -387,7 +381,6 @@ Max recall & 0.175 & 0.861 & 0.947 & 0.800 & 0.780 \\
     \label{fig:operating_analysis}
 \end{figure}
 
-\FloatBarrier
 \section{Discussion}
 \subsection{Interpretation of Results}
 The retrained ensemble provides a strong, recall-oriented balanced operating point, reaching 86.1\% test accuracy, 94.7\% unsafe recall, 0.867 unsafe $F_1$, 0.970 ROC-AUC, and 0.978 PR-AUC. The additional unsafe training data raises AUC beyond the previous 0.949 result and substantially improves balanced unsafe recall.
