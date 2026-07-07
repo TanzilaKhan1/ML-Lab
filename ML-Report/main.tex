@@ -128,19 +128,13 @@ Representative examples of the vehicle categories are shown in Fig.~\ref{fig:leg
 Cleaning removed images whose content was blurred, ambiguous, low quality, heavily obstructed, poorly framed, or unreliable for class assignment. This step reduced label noise while preserving realistic variation in traffic, vehicle structure, crowding, and illumination.
 
 \subsection{Data Annotation}
-Manual annotation assigned each retained image to one of two classes: negative for safe/normal passenger conditions and positive for unsafe/risky hanging travel. Figure~\ref{fig:annotation_samples} shows representative annotation examples, including license-plate annotations retained only for possible future vehicle-identification integration.
+Manual annotation assigned each retained image to one of two classes: negative for safe/normal passenger conditions and positive for unsafe/risky hanging travel. Figure~\ref{fig:annotation_samples} shows representative annotation examples.
 
 \begin{figure}[!t]
     \centering
-    \subfloat[Safe/normal annotation.]{\includegraphics[width=0.35\linewidth]{annotation_1.jpeg}}
+    \subfloat[Unsafe/risky annotation.]{\includegraphics[width=0.35\linewidth]{annotation_1.jpeg}}
     \hfill
-    \subfloat[Unsafe/risky annotation.]{\includegraphics[width=0.35\linewidth]{annotation_2.jpeg}}
-
-    \vspace{0.4cm}
-
-    \subfloat[License-plate annotation.]{\includegraphics[width=0.35\linewidth]{annotation_3.png}}
-    \hfill
-    \subfloat[Combined annotation.]{\includegraphics[width=0.35\linewidth]{annotation_4.png}}
+    \subfloat[Safe/normal annotation.]{\includegraphics[width=0.35\linewidth]{annotation_2.jpeg}}
     \caption{Representative annotation examples.}
     \label{fig:annotation_samples}
 \end{figure}
