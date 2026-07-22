@@ -438,7 +438,9 @@ This paper presented a computer-vision and machine-learning pipeline for detecti
 
 The updated result set compares Logistic Regression, Gaussian Naive Bayes, SVM with an RBF kernel, a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and a ResNet50--ConvNeXt ensemble. On the untouched test set, the deployed ensemble reaches a recall-oriented balanced result with 86.1\% accuracy, 94.7\% unsafe recall, and 0.970 ROC-AUC, while ResNet50 gives the highest single-model accuracy at 92.4\%. Because the retrained data is near-balanced, the balanced, high-recall, and max-recall thresholds coincide at the same 86.1\%-accuracy and 94.7\%-recall operating point rather than trading accuracy for a separate perfect-recall mode.
 
-As a practical outcome of this work, we developed an online platform that allows users to classify public-transport images as safe/normal or unsafe/risky. The platform is available at \href{https://ml-predictor-app.streamlit.app/}{\texttt{ml-predictor-app.streamlit.app}}.
+
+As a practical outcome of this work, we developed an online platform that classifies public-transport images as either safe/normal or unsafe/risky. The project resources are publicly accessible through the following links: the \href{https://github.com/TanzilaKhan1/Detection-of-Hanging-Passengers/}{\textcolor{blue}{source-code repository}}, the \href{https://drive.google.com/drive/folders/1D3jDBvA-cAhwRPA4wUBUss5zlwdXdLJY?usp=drive_link}{\textcolor{blue}{project dataset}}, and the \href{https://ml-predictor-app.streamlit.app/}{\textcolor{blue}{deployed web platform}}.
+
 
 Future work should focus on collecting a larger localized dataset, improving recall for unsafe hanging travel, evaluating the system on real-time video streams, and designing privacy-aware deployment procedures. Detection-based models such as YOLO \cite{redmon2016yolo} should also be tested to localize hanging passengers rather than only classify whole images. License-plate recognition may be integrated only as a future extension for vehicle identification after unsafe conditions are detected.
 
