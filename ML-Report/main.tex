@@ -396,7 +396,7 @@ The neural models also depend on training-time augmentation to increase effectiv
 
 The current system is limited to image-level binary classification. It does not localize hanging passengers, estimate crowd density, track passengers across frames, or evaluate performance on large-scale real-time video streams. Roadside transport images may also include identifiable people, license plates, and location cues, so deployment would require anonymization and data-governance safeguards. The method should therefore be interpreted as a baseline for visual safety classification rather than an operational monitoring system.
 
-\begin{table}[!t]
+\begin{table}[!htbp]
 \centering
 \caption{Train, Validation, and Test Generalization}
 \label{tab:generalization}
@@ -421,7 +421,7 @@ Naive Bayes & 0.832 & 0.168 & 0.810 & 0.190 & 0.734 & 0.266 & 0.737 \\
 }
 \end{table}
 
-\begin{figure}[!t]
+\begin{figure}[!htbp]
     \centering
     \subfloat[Train, validation, and test error.\label{fig:generalization_error}]{%
         \includegraphics[width=\linewidth]{figures/fig07_train_val_test_error.png}}
