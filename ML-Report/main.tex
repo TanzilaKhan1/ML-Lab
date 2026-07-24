@@ -42,7 +42,7 @@ Dhaka, Bangladesh}}
 \maketitle
 
 \begin{abstract}
-Unsafe door-hanging and overcrowded travel are persistent safety risks in Dhaka's public transport system, particularly in buses and legunas operating under high passenger demand. Existing intelligent transportation research has addressed vehicle detection, passenger counting, and general crowd analysis, but localized automated detection of unsafe hanging travel remains limited. This paper presents an image-based machine-learning framework for classifying public transport scenes into safe/normal and unsafe/risky conditions. A custom bus and leguna image dataset is prepared through cleaning, annotation, preprocessing, and augmentation. For classical machine-learning baselines, Histogram of Oriented Gradients (HOG) descriptors are used with Logistic Regression, Gaussian Naive Bayes, and a Support Vector Machine (SVM) with a radial basis function kernel. Deep models including a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and an ensemble are also evaluated to compare learned visual features with handcrafted HOG representations. The retrained dataset contains 523 annotation-labeled images, and augmentation is restricted to the training partition to avoid leakage. On the untouched 79-image test set, the ResNet50--ConvNeXt ensemble reaches 94.7\% unsafe recall, 86.1\% accuracy, and 0.970 ROC-AUC at the balanced operating point, while ResNet50 attains the highest single-model accuracy of 92.4\%. Because a missed hanging passenger is more costly than a false alarm, the system is tuned to favor unsafe-class recall. The results indicate that a localized, annotation-driven dataset with leakage-free augmentation allows standard transfer-learning models to detect unsafe hanging travel with high reliability.
+Unsafe door-hanging and overcrowded travel are persistent safety risks in Dhaka's public transport system, particularly in buses and legunas operating under high passenger demand. Existing intelligent transportation research has addressed vehicle detection, passenger counting, and general crowd analysis, but localized automated detection of unsafe hanging travel remains limited. This paper presents an image-based machine-learning framework for classifying public transport scenes into safe/normal and unsafe/risky conditions. A custom bus and leguna image dataset is prepared through cleaning, annotation, preprocessing, and augmentation. For classical machine-learning baselines, Histogram of Oriented Gradients (HOG) descriptors combined with Logistic Regression, Gaussian Naive Bayes, and a Support Vector Machine (SVM) using a radial basis function kernel. Deep models including a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and an ensemble are also evaluated to compare learned visual features with handcrafted HOG representations. The retrained dataset contains 523 annotation-labeled images, and augmentation is restricted to the training partition to avoid leakage. On the untouched 79-image test set, the ResNet50--ConvNeXt ensemble reaches 94.7\% unsafe recall, 86.1\% accuracy, and 0.970 ROC-AUC at the balanced operating point, while ResNet50 attains the highest single-model accuracy of 92.4\%. Because a missed hanging passenger is more costly than a false alarm, the system is tuned to favor unsafe-class recall. The results indicate that a localized, annotation-driven dataset with leakage-free augmentation allows standard transfer-learning models to detect unsafe hanging travel with high reliability.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -196,8 +196,8 @@ where $\mu_{y,i}$ and $\sigma_{y,i}^{2}$ are the mean and variance of feature $i
 \hat{y} = \argmax_{y \in \{0, 1\}} \; P(y) \prod_{i=1}^{d} p(x_i \mid y).
 \end{equation}
 Although the independence assumption is restrictive for correlated HOG features, the model is useful as a low-complexity comparator.
+The Support Vector Machine (SVM) identifies a decision boundary that maximizes the margin between the negative and positive classes \cite{cortes1995svm}. To capture non-linear patterns in the HOG feature space, the radial basis function (RBF) kernel is used to quantify the similarity between pairs of feature vectors,
 
-The Support Vector Machine (SVM) seeks a maximum-margin boundary between the negative and positive classes \cite{cortes1995svm}. To model non-linear separation in the HOG feature space, the radial basis function (RBF) kernel measures the similarity between two feature vectors,
 \begin{equation}
 K(\mathbf{x}_i, \mathbf{x}_j) = \exp\!\left(-\gamma\, \lVert \mathbf{x}_i - \mathbf{x}_j \rVert_2^{2}\right), \qquad \gamma > 0,
 \end{equation}
@@ -267,7 +267,8 @@ so that $p_1$ is the estimated probability of the unsafe class.
 Neural models were trained with the AdamW optimizer, a decoupled weight-decay variant of Adam \cite{kingma2015adam}, under a cosine-annealing learning-rate schedule; the complete training configuration is listed in Table~\ref{tab:model_config}.
 
 \subsection{Evaluation Metrics}
-Evaluation used accuracy, balanced accuracy, precision, recall, specificity, the $F_1$-score, the Matthews correlation coefficient (MCC), ROC-AUC, and PR-AUC. Because the classes are close to balanced, both ROC-AUC and PR-AUC are reported, and per-class recall is emphasized for the safety-critical unsafe class. Let $TP$, $TN$, $FP$, and $FN$ denote the numbers of true positives, true negatives, false positives, and false negatives, with the positive class corresponding to unsafe/risky hanging travel. The threshold-dependent metrics are then defined as
+Model performance was assessed using accuracy, balanced accuracy, precision, recall, specificity, the $F_1$-score, the Matthews correlation coefficient (MCC), ROC-AUC, and PR-AUC. Since the two classes are approximately balanced, both ROC-AUC and PR-AUC are reported to provide a more complete view of classification performance. Particular attention is given to recall for the unsafe/risky class, as failing to identify an unsafe case carries greater practical concern. Let $TP$, $TN$, $FP$, and $FN$ denote the numbers of true positives, true negatives, false positives, and false negatives, respectively, where unsafe/risky hanging travel is treated as the positive class. The threshold-dependent evaluation metrics are defined as follows:
+
 \begin{align}
 \mathrm{Accuracy} &= \frac{TP + TN}{TP + TN + FP + FN}, \label{eq:acc}\\[2pt]
 \mathrm{Precision} &= \frac{TP}{TP + FP}, \qquad
@@ -284,12 +285,14 @@ Recall (equivalently, sensitivity or the true positive rate) quantifies unsafe-c
 &= \frac{1}{2}\!\left(\frac{TP}{TP + FN} + \frac{TN}{TN + FP}\right). \label{eq:bacc}
 \end{split}
 \end{equation}
-The Matthews correlation coefficient (MCC) is the Pearson correlation coefficient between the predicted and true binary labels. It combines all four confusion-matrix cells and attains a high value only when the classifier performs well on both classes simultaneously, which makes it a reliable single-number summary under class imbalance \cite{chicco2020mcc}:
+The Matthews correlation coefficient (MCC) measures the correlation between the predicted and true binary labels. By incorporating all four entries of the confusion matrix, it produces a high score only when the classifier performs consistently well across both classes. This makes MCC a particularly informative single-value measure, especially when class distributions are imbalanced \cite{chicco2020mcc}:
+
 \begin{equation}
 \mathrm{MCC} = \frac{TP \cdot TN - FP \cdot FN}
 {\sqrt{(TP{+}FP)(TP{+}FN)(TN{+}FP)(TN{+}FN)}}. \label{eq:mcc}
 \end{equation}
-The coefficient lies in $[-1, +1]$, where $+1$ indicates perfect prediction, $0$ chance-level prediction, and $-1$ total disagreement; when any factor in the denominator is zero, it is taken as $0$ by convention. Two threshold-independent metrics summarize ranking quality across all decision thresholds. ROC-AUC is the area under the receiver operating characteristic curve, which plots the true positive rate against the false positive rate, and equals the probability that a randomly chosen unsafe image is scored above a randomly chosen safe one. PR-AUC (average precision) is the area under the precision--recall curve,
+The coefficient ranges from $-1$ to $+1$. A value of $+1$ represents perfect agreement between predictions and true labels, $0$ indicates no correlation, and $-1$ reflects complete disagreement. When the denominator is undefined because one of its factors is zero, the coefficient is conventionally assigned a value of $0$. In addition to these threshold-dependent measures, two threshold-independent metrics are used to assess ranking performance across all possible decision thresholds. ROC-AUC measures the area under the receiver operating characteristic curve, which plots the true positive rate against the false positive rate. It can also be interpreted as the probability that the model assigns a higher score to a randomly selected unsafe image than to a randomly selected safe image. PR-AUC, reported as average precision, summarizes the relationship between precision and recall across different classification thresholds.
+
 \begin{equation}
 \mathrm{AP} = \sum_{n} \left(R_n - R_{n-1}\right) P_n, \label{eq:ap}
 \end{equation}
@@ -342,7 +345,7 @@ AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_r
     \hfill
     \subfloat[Precision--recall curves.\label{fig:paper_pr_curves}]{%
         \includegraphics[width=0.49\textwidth]{figures/fig04_pr_curves.png}}
-    \caption{Receiver operating characteristic and precision--recall curves for all nine models on the held-out test set.}
+    \caption{Receiver operating characteristic and precision--recall curves comparing all nine models on the held-out test set.}
     \label{fig:classwise_curve_analysis}
 \end{figure*}
 
@@ -434,15 +437,15 @@ Naive Bayes & 0.832 & 0.168 & 0.810 & 0.190 & 0.734 & 0.266 & 0.737 \\
 
 \FloatBarrier
 \section{Conclusion and Future Work}
-This paper presented a computer-vision and machine-learning pipeline for detecting unsafe hanging travel in Dhaka public transport. The task was formulated as binary image classification over safe/normal and unsafe/risky passenger conditions. A localized bus and leguna dataset was prepared through cleaning, annotation, preprocessing, and augmentation, with HOG features used for classical models and RGB inputs used for CNN-based classification.
+This paper developed a computer-vision and machine-learning pipeline for detecting unsafe hanging travel in Dhaka public transport. The task was formulated as binary image classification over safe/normal and unsafe/risky passenger conditions. A localized bus and leguna dataset was prepared through cleaning, annotation, preprocessing, and augmentation, with HOG features used for classical models and RGB inputs used for CNN-based classification.
 
-The updated result set compares Logistic Regression, Gaussian Naive Bayes, SVM with an RBF kernel, a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and a ResNet50--ConvNeXt ensemble. On the untouched test set, the deployed ensemble reaches a recall-oriented balanced result with 86.1\% accuracy, 94.7\% unsafe recall, and 0.970 ROC-AUC, while ResNet50 gives the highest single-model accuracy at 92.4\%. Because the retrained data is near-balanced, the balanced, high-recall, and max-recall thresholds coincide at the same 86.1\%-accuracy and 94.7\%-recall operating point rather than trading accuracy for a separate perfect-recall mode.
+The updated result set compares traditional machine learning algorithms like Logistic Regression, Gaussian Naive Bayes,with deep networks like SVM with an RBF kernel, a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and a ResNet50--ConvNeXt ensemble. On the untouched test set, the deployed ensemble reaches a recall-oriented balanced result with 86.1\% accuracy, 94.7\% unsafe recall, and 0.970 ROC-AUC, while ResNet50 gives the highest single-model accuracy at 92.4\%. Because the retrained data is near-balanced, the balanced, high-recall, and max-recall thresholds coincide at the same 86.1\%-accuracy and 94.7\%-recall operating point rather than trading accuracy for a separate perfect-recall mode.
 
 
 As a practical outcome of this work, we developed an online platform that classifies public-transport images as either safe/normal or unsafe/risky. The project resources are publicly accessible through the following links: the \href{https://github.com/TanzilaKhan1/Detection-of-Hanging-Passengers/}{\textcolor{blue}{source-code repository}}, the \href{https://drive.google.com/drive/folders/1D3jDBvA-cAhwRPA4wUBUss5zlwdXdLJY?usp=drive_link}{\textcolor{blue}{project dataset}}, and the \href{https://ml-predictor-app.streamlit.app/}{\textcolor{blue}{deployed web platform}}.
 
 
-Future work should focus on collecting a larger localized dataset, improving recall for unsafe hanging travel, evaluating the system on real-time video streams, and designing privacy-aware deployment procedures. Detection-based models such as YOLO \cite{redmon2016yolo} should also be tested to localize hanging passengers rather than only classify whole images. License-plate recognition may be integrated only as a future extension for vehicle identification after unsafe conditions are detected.
+Future work should focus on collecting a larger localized dataset, improving recall for unsafe hanging travel, evaluating the system on real-time video streams, and designing privacy-aware deployment procedures. Detection-based models such as YOLO \cite{redmon2016yolo} should also be tested to localize hanging passengers rather than only classify whole images. License-plate recognition could be incorporated in future work to identify vehicles after an unsafe condition has been detected.
 
 \FloatBarrier
 \begin{thebibliography}{99}
