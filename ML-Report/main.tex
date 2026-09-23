@@ -3,11 +3,8 @@
 \usepackage{arxiv}
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb}
-\usepackage{cite}
 \usepackage{booktabs}
-\usepackage{multirow}
 \usepackage{tabularx}
-\usepackage{url}
 \usepackage{xurl}
 \usepackage{pgfplots}
 \usepackage{placeins}
@@ -28,6 +25,7 @@ Taif Ahmed Turjo, Amio Rashid, Mahmud Hasan Walid\\
 Department of Computer Science and Engineering\\
 University of Dhaka\\
 Dhaka, Bangladesh}
+\date{}
 
 \begin{document}
 \maketitle
@@ -36,7 +34,7 @@ Dhaka, Bangladesh}
 Unsafe door-hanging and overcrowded travel are persistent safety risks in Dhaka's public transport system, particularly in buses and legunas operating under high passenger demand. Existing intelligent transportation research has addressed vehicle detection, passenger counting, and general crowd analysis, but localized automated detection of unsafe hanging travel remains limited. This paper presents an image-based machine-learning framework for classifying public transport scenes into safe/normal and unsafe/risky conditions. A custom bus and leguna image dataset is prepared through cleaning, annotation, preprocessing, and augmentation. For classical machine-learning baselines, Histogram of Oriented Gradients (HOG) descriptors combined with Logistic Regression, Gaussian Naive Bayes, and a Support Vector Machine (SVM) using a radial basis function kernel. Deep models including a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and an ensemble are also evaluated to compare learned visual features with handcrafted HOG representations. The retrained dataset contains 523 annotation-labeled images, and augmentation is restricted to the training partition to avoid leakage. On the untouched 79-image test set, the ResNet50--ConvNeXt ensemble reaches 94.7\% unsafe recall, 86.1\% accuracy, and 0.970 ROC-AUC at the balanced operating point, while ResNet50 attains the highest single-model accuracy of 92.4\%. Because a missed hanging passenger is more costly than a false alarm, the system is tuned to favor unsafe-class recall. The results indicate that a localized, annotation-driven dataset with leakage-free augmentation allows standard transfer-learning models to detect unsafe hanging travel with high reliability.
 \end{abstract}
 
-\textbf{Keywords:}
+\noindent\textbf{Keywords:}
 Unsafe public transport, computer vision, image classification, Histogram of Oriented Gradients, support vector machine, convolutional neural network, intelligent transportation system.
 
 \section{Introduction}
@@ -69,14 +67,14 @@ The key gap is that existing work rarely addresses unsafe door-hanging detection
 \subsection{Data Collection}
 The dataset contains images of buses and legunas captured under real-world public transport conditions in Dhaka. The samples cover safe/normal and unsafe/risky cases with variation in vehicle type, passenger density, camera angle, lighting, and scene clutter. Labels are derived from image annotations: an image is unsafe if it contains at least one box labeled \texttt{unsafe}; otherwise it is safe, and license-plate boxes are ignored. The retrained dataset contains 523 labeled originals, with 272 safe samples and 251 unsafe samples. Figure~\ref{fig:eda} summarizes the updated class distribution and split composition, and Table~\ref{tab:dataset_composition} lists the per-partition counts.
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/fig01_dataset_overview.png}
     \caption{Dataset overview: annotation-derived class balance, vehicle-wise class distribution across buses and legunas, stratified 70/15/15 split composition, and train-only augmentation growth from 365 originals to 2{,}730 training images.}
     \label{fig:eda}
 \end{figure}
 
-\begin{table}[!t]
+\begin{table}[htbp]
 \centering
 \caption{Dataset Composition After Splitting and Train-Only Augmentation}
 \label{tab:dataset_composition}
@@ -96,7 +94,7 @@ Labeled originals & 523 & 272 & 251 \\
 
 Representative examples of the vehicle categories are shown in Fig.~\ref{fig:leguna_samples} and Fig.~\ref{fig:bus_samples}.
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \subfloat[Negative class.]{\includegraphics[width=0.4\linewidth]{leguna_negative.png}}
     \hfill
@@ -105,7 +103,7 @@ Representative examples of the vehicle categories are shown in Fig.~\ref{fig:leg
     \label{fig:leguna_samples}
 \end{figure}
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \subfloat[Negative class.]{\includegraphics[width=0.4\linewidth]{bus_negative.png}}
     \hfill
@@ -120,7 +118,7 @@ Cleaning removed images whose content was blurred, ambiguous, low quality, heavi
 \subsection{Data Annotation}
 Manual annotation assigned each retained image to one of two classes: negative for safe/normal passenger conditions and positive for unsafe/risky hanging travel. Figure~\ref{fig:annotation_samples} shows representative annotation examples.
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \subfloat[Unsafe/risky annotation.]{\includegraphics[width=0.35\linewidth]{annotation_1.jpeg}}
     \hfill
@@ -155,7 +153,7 @@ The complete retraining procedure is summarized below so that data preparation, 
     \item \textbf{Test-time inference:} Apply horizontal-flip test-time augmentation to the deep models, average the resulting probabilities, select the configured operating threshold, and evaluate once on the untouched test set.
 \end{enumerate}
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{arch_svm.png}
     \caption{Overview of the HOG-based classical machine-learning pipeline.}
@@ -200,7 +198,7 @@ where $\mathcal{S}$ indexes the support vectors, $\alpha_i \ge 0$ are the learne
 \subsection{Deep Neural Models}
 The deep models process RGB images directly and learn spatial features from the training data \cite{krizhevsky2012alexnet}. The experiments evaluate five neural architectures: a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, and ConvNeXt-Tiny. The scratch CNN provides a lightweight learned-feature baseline, while the other architectures use ImageNet-pretrained weights and two-phase fine-tuning \cite{he2016resnet}, \cite{tan2019efficientnet}, \cite{liu2022convnext}. A probability-level ensemble combines ResNet50 and ConvNeXt-Tiny. All neural models use batch normalization \cite{ioffe2015batchnorm} for stable optimization and dropout \cite{srivastava2014dropout} for regularization. Weighted sampling, class-weighted loss, validation-tuned thresholds, and horizontal-flip test-time augmentation address imbalance and improve unsafe-class recall. Figure~\ref{fig:arch_cnn} shows the scratch CNN architecture and Fig.~\ref{fig:arch_resnet} illustrates the two-phase transfer-learning scheme shared by the pretrained models; Table~\ref{tab:model_config} reports the combined configuration.
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{arch_cnn.png}
     \caption{Scratch CNN architecture used for image-level binary classification.}
@@ -221,7 +219,7 @@ The data split followed a four-way stratified protocol over vehicle type and cla
 \subsection{Model Configuration}
 The experiments were implemented in Python using scikit-learn for the classical pipelines \cite{pedregosa2011sklearn}, PyTorch for the neural model \cite{paszke2019pytorch}, and scikit-image for image processing \cite{vanderwalt2014skimage}. A fixed random seed of 42 was used for reproducibility. Model and preprocessing settings are consolidated in Table~\ref{tab:model_config}.
 
-\begin{table}[!t]
+\begin{table}[htbp]
 \centering
 \caption{Model Configuration}
 \label{tab:model_config}
@@ -320,7 +318,7 @@ Naive Bayes & 0.734 & 0.734 & 0.737 & 0.718 & 0.732 & 0.727 & 0.866 & 0.884 & 0.
 }
 \end{table}
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/fig02_model_comparison.png}
     \caption{Held-out test comparison of accuracy, unsafe recall, unsafe $F_1$, and ROC-AUC across all nine reported models.}
@@ -330,7 +328,7 @@ Naive Bayes & 0.734 & 0.734 & 0.737 & 0.718 & 0.732 & 0.727 & 0.866 & 0.884 & 0.
 \subsection{ROC and AUC Analysis}
 AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_roc_test} shows held-out ROC curves for all reported models, and Fig.~\ref{fig:paper_pr_curves} shows the corresponding precision--recall curves.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
     \centering
     \subfloat[ROC curves.\label{fig:paper_roc_test}]{%
         \includegraphics[width=0.49\linewidth]{figures/fig03_roc_test.png}}
@@ -344,7 +342,7 @@ AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_r
 \subsection{Error Analysis}
 False negatives are the most safety-critical error type because they correspond to unsafe/risky hanging-travel cases predicted as safe/normal. At the balanced operating point, the ensemble detects 94.7\% of unsafe test images, missing only 2 of 38 hangers. Because the retrained dataset is close to balanced, the tuned balanced, high-recall, and max-recall thresholds fall within 0.006 of one another, so all three settle at the same operating point of 86.1\% accuracy and 94.7\% unsafe recall. The earlier regime, in which perfect recall could only be bought at low accuracy, no longer appears: the additional unsafe training data lets the ensemble reach high recall without sacrificing accuracy. Table~\ref{tab:operating_modes} lists the three modes, and Fig.~\ref{fig:operating_analysis} shows the threshold trade-off.
 
-\begin{table}[t]
+\begin{table}[htbp]
 \centering
 \caption{Selectable operating points for the deployed ensemble. On the near-balanced retrained data the three tuned thresholds nearly coincide, so the modes report the same test operating point.}
 \label{tab:operating_modes}
@@ -363,7 +361,7 @@ Max recall & 0.175 & 0.861 & 0.947 & 0.800 & 0.780 \\
 }
 \end{table}
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{figures/fig06_tradeoff.png}
     \caption{Ensemble threshold selection on the held-out test set: accuracy and unsafe recall against the decision threshold, with the balanced, high-recall, and max-recall operating points marked. Because the retrained dataset is near-balanced, the three points nearly coincide.}
@@ -391,7 +389,7 @@ The neural models also depend on training-time augmentation to increase effectiv
 
 The current system is limited to image-level binary classification. It does not localize hanging passengers, estimate crowd density, track passengers across frames, or evaluate performance on large-scale real-time video streams. Roadside transport images may also include identifiable people, license plates, and location cues, so deployment would require anonymization and data-governance safeguards. The method should therefore be interpreted as a baseline for visual safety classification rather than an operational monitoring system.
 
-\begin{table}[!htbp]
+\begin{table}[htbp]
 \centering
 \caption{Train, Validation, and Test Generalization}
 \label{tab:generalization}
@@ -416,7 +414,7 @@ Naive Bayes & 0.832 & 0.168 & 0.810 & 0.190 & 0.734 & 0.266 & 0.737 \\
 }
 \end{table}
 
-\begin{figure}[!htbp]
+\begin{figure}[htbp]
     \centering
     \subfloat[Train, validation, and test error.\label{fig:generalization_error}]{%
         \includegraphics[width=\linewidth]{figures/fig07_train_val_test_error.png}}
@@ -434,7 +432,7 @@ This paper developed a computer-vision and machine-learning pipeline for detecti
 The updated result set compares traditional machine learning algorithms like Logistic Regression, Gaussian Naive Bayes,with deep networks like SVM with an RBF kernel, a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and a ResNet50--ConvNeXt ensemble. On the untouched test set, the deployed ensemble reaches a recall-oriented balanced result with 86.1\% accuracy, 94.7\% unsafe recall, and 0.970 ROC-AUC, while ResNet50 gives the highest single-model accuracy at 92.4\%. Because the retrained data is near-balanced, the balanced, high-recall, and max-recall thresholds coincide at the same 86.1\%-accuracy and 94.7\%-recall operating point rather than trading accuracy for a separate perfect-recall mode.
 
 
-As a practical outcome of this work, we developed an online platform that classifies public-transport images as either safe/normal or unsafe/risky. The project resources are publicly accessible through the following links: the \href{https://github.com/TanzilaKhan1/Detection-of-Hanging-Passengers/}{\textcolor{blue}{source-code repository}}, the \href{https://drive.google.com/drive/folders/1D3jDBvA-cAhwRPA4wUBUss5zlwdXdLJY?usp=drive_link}{\textcolor{blue}{project dataset}}, and the \href{https://ml-predictor-app.streamlit.app/}{\textcolor{blue}{deployed web platform}}.
+As a practical outcome of this work, we developed an online platform that classifies public-transport images as either safe/normal or unsafe/risky. The project resources are publicly accessible through the following links: the \href{https://github.com/TanzilaKhan1/Detection-of-Hanging-Passengers/}{source-code repository}, the \href{https://drive.google.com/drive/folders/1D3jDBvA-cAhwRPA4wUBUss5zlwdXdLJY?usp=drive_link}{project dataset}, and the \href{https://ml-predictor-app.streamlit.app/}{deployed web platform}.
 
 
 Future work should focus on collecting a larger localized dataset, improving recall for unsafe hanging travel, evaluating the system on real-time video streams, and designing privacy-aware deployment procedures. Detection-based models such as YOLO \cite{redmon2016yolo} should also be tested to localize hanging passengers rather than only classify whole images. License-plate recognition could be incorporated in future work to identify vehicles after an unsafe condition has been detected.
