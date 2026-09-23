@@ -9,15 +9,15 @@
 \usepackage{pgfplots}
 \usepackage{placeins}
 \usepackage{needspace}
+\usepackage{caption}
 \usepackage[hidelinks]{hyperref}
 \usepackage[font=footnotesize]{subfig}
 \pgfplotsset{compat=1.18}
 \emergencystretch=2em
 
 % Keep bibliography links compact and clickable rather than exposing long raw URLs.
-\renewcommand{\url}[1]{\href{#1}{link}}
+\renewcommand{\url}[1]{\href{#1}{\nolinkurl{#1}}}
 
-\newcommand{\available}[2]{Available: \href{#1}{#2}}
 \setcounter{topnumber}{2}
 \setcounter{bottomnumber}{2}
 \setcounter{totalnumber}{4}
@@ -34,7 +34,7 @@
 
 \graphicspath{{./}{./figures/}{./tables/}}
 
-\title{Detection and Risk Assessment of Unsafe Hanging Travel in Public Transport Using Machine Learning}
+\title{Detection of Unsafe Hanging Travel in Public Transport Using Machine Learning}
 
 \author{Tazkia Malik, Sadek Hossain Asif, Tanzila Khan\\
 Taif Ahmed Turjo, Amio Rashid, Mahmud Hasan Walid\\
@@ -43,11 +43,18 @@ University of Dhaka\\
 Dhaka, Bangladesh}
 \date{}
 
+\hypersetup{
+  pdftitle={Detection of Unsafe Hanging Travel in Public Transport Using Machine Learning},
+  pdfauthor={Tazkia Malik, Sadek Hossain Asif, Tanzila Khan, Taif Ahmed Turjo, Amio Rashid, Mahmud Hasan Walid},
+  pdfsubject={Image-based binary classification of unsafe hanging travel in public transport},
+  pdfkeywords={unsafe public transport, hanging travel, computer vision, image classification, Dhaka}
+}
+
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Unsafe door-hanging and overcrowded travel are persistent safety risks in Dhaka's public transport system, particularly in buses and legunas operating under high passenger demand. Existing intelligent transportation research has addressed vehicle detection, passenger counting, and general crowd analysis, but localized automated detection of unsafe hanging travel remains limited. This paper presents an image-based machine-learning framework for classifying public transport scenes into safe/normal and unsafe/risky conditions. A custom bus and leguna image dataset is prepared through cleaning, annotation, preprocessing, and augmentation. For classical machine-learning baselines, Histogram of Oriented Gradients (HOG) descriptors are combined with Logistic Regression, Gaussian Naive Bayes, and a Support Vector Machine (SVM) using a radial basis function kernel. Deep models including a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and an ensemble are also evaluated to compare learned visual features with handcrafted HOG representations. The retrained dataset contains 523 annotation-labeled images, and augmentation is restricted to the training partition to avoid leakage. On the untouched 79-image test set, the ResNet50--ConvNeXt ensemble reaches 94.7\% unsafe recall, 86.1\% accuracy, and 0.970 ROC-AUC at the balanced operating point, while ResNet50 attains the highest single-model accuracy of 92.4\%. Because a missed hanging passenger is more costly than a false alarm, the system is tuned to favor unsafe-class recall. The results indicate that a localized, annotation-driven dataset with leakage-free augmentation supports promising unsafe-hanging-travel classification performance, while the small test set limits the precision of the estimate.
+Unsafe door-hanging and overcrowded travel are persistent safety risks in Dhaka's public transport system, particularly in buses and legunas operating under high passenger demand. Existing intelligent transportation research has addressed vehicle detection, passenger counting, and general crowd analysis, but localized automated detection of unsafe hanging travel remains limited. This paper presents an image-based machine-learning framework for classifying public transport scenes into safe/normal and unsafe/risky conditions. A custom bus and leguna image dataset is prepared through cleaning, annotation, preprocessing, and augmentation. For classical machine-learning baselines, Histogram of Oriented Gradients (HOG) descriptors are combined with Logistic Regression, Gaussian Naive Bayes, and a Support Vector Machine (SVM) using a radial basis function kernel. Deep models including a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and an ensemble are also evaluated to compare learned visual features with handcrafted HOG representations. The retrained dataset contains 523 annotation-labeled images, and augmentation uses train-only augmentation that avoids augmentation leakage. On the untouched 79-image test set, the ResNet50--ConvNeXt ensemble reaches 94.7\% unsafe recall, 86.1\% accuracy, and 0.970 ROC-AUC at the balanced operating point, while ResNet50 attains the highest single-model accuracy of 92.4\%. Because this is intended for safety-oriented monitoring, the system is tuned to prioritize unsafe-class recall while retaining acceptable discrimination. The current run yields promising unsafe-hanging-travel classification performance, while the small test set limits the precision of the estimate.
 \end{abstract}
 
 \noindent\textbf{Keywords:}
@@ -85,7 +92,7 @@ The dataset contains images of buses and legunas captured under real-world publi
 
 \begin{figure}[!htbp]
     \centering
-    \includegraphics[width=0.94\linewidth,height=0.25\textheight,keepaspectratio]{figures/fig01_dataset_overview.png}
+    \includegraphics[width=0.98\linewidth,height=0.32\textheight,keepaspectratio]{figures/fig01_dataset_overview.png}
     \caption{Dataset overview: annotation-derived class balance, vehicle-wise class distribution across buses and legunas, stratified 70/15/15 split composition, and train-only augmentation growth from 365 originals to 2{,}730 training images.}
     \label{fig:eda}
 \end{figure}
@@ -108,7 +115,7 @@ Labeled originals & 523 & 272 & 251 \\
 \end{tabular}
 \end{table}
 
-Representative examples of the vehicle categories are shown in Fig.~\ref{fig:leguna_samples} and Fig.~\ref{fig:bus_samples}.
+Representative examples of the vehicle categories are shown in Figure~\ref{fig:leguna_samples} and Figure~\ref{fig:bus_samples}.
 
 \begin{figure}[!htbp]
     \centering
@@ -144,9 +151,11 @@ Manual annotation assigned each retained image to one of two classes: negative f
 \end{figure}
 
 \subsection{Data Augmentation}
-Augmentation was restricted to the training partition to prevent leakage into validation or test data. The 365 training originals produced 2,365 offline augmented samples, yielding 2,730 training images with 1,330 safe and 1,400 unsafe samples. Validation and test each contain 79 unaugmented originals, divided into 41 safe and 38 unsafe images. Deep models additionally used online augmentation, weighted sampling, and horizontal-flip test-time augmentation. These transformations simulate common roadside imaging variation while preserving the class label \cite{shorten2019augmentation}.
+The source images were EXIF-orientation-corrected, converted to RGB, resized so the shorter side was 512 pixels, center-cropped to $512\times512$, and written as PNG before splitting. The repository stores raw images and annotations in Cloudflare R2; the available records do not document the original acquisition procedure or collection period. Only the 365 training originals were augmented offline, producing 2,365 copies and 2,730 training images with 1,330 safe and 1,400 unsafe samples; validation and test remain 79 unaugmented originals each (41 safe and 38 unsafe). Offline augmentation used the implemented Albumentations pipeline: horizontal flip ($p=0.50$); one of affine transformation (scale 0.90--1.12, translation up to 8\%, rotation $\pm15^\circ$, shear $\pm8^\circ$), perspective distortion (scale 0.02--0.08), or random-resized crop (scale 0.78--1.00, aspect ratio 0.8--1.25) with $p=0.90$; brightness/contrast, gamma (70--140), or color jitter with $p=0.85$; hue--saturation--value, RGB shift, or CLAHE with $p=0.55$; sharpening or embossing ($p=0.20$); blur ($p=0.30$); noise ($p=0.30$); compression or downscaling ($p=0.25$); shadow, fog, or sun flare ($p=0.15$); coarse dropout ($p=0.30$); and grayscale ($p=0.05$). Thus, offline transforms are applied after splitting and only to training originals. The public implementation gives the exhaustive transform parameterization.
 
-All images were standardized before model-specific processing. The standardized preprocessing and model input settings are summarized in Table~\ref{tab:model_config}. The dataset is available online through the \href{https://drive.google.com/drive/folders/1D3jDBvA-cAhwRPA4wUBUss5zlwdXdLJY}{dataset repository}.
+During deep-model training, the online pipeline applies random-resized crop (scale 0.8--1.0, ratio 0.8--1.25), horizontal flip, $\pm10^\circ$ rotation, RandAugment (two operations, magnitude 7), ColorJitter (0.25, 0.25, 0.25, 0.05), tensor conversion, ImageNet normalization, and random erasing ($p=0.25$, scale 0.02--0.12). Evaluation preprocessing uses resize to 1.15 times the model input followed by center crop and ImageNet normalization. Test-time augmentation averages the original and horizontally flipped evaluation predictions for deep models. Weighted random sampling and class-weighted cross-entropy or focal loss are training controls, not image transforms. These transformations simulate common roadside imaging variation while preserving the class label \cite{shorten2019augmentation}.
+
+All images were standardized before model-specific processing. The standardized preprocessing and model input settings are summarized in Table~\ref{tab:model_config}. The dataset is available through \href{https://data.mendeley.com/datasets/24n4zpdt69/1}{Mendeley Data}.
 
 \subsection{Ethical Considerations}
 The dataset is used only for academic safety-monitoring research. Images may contain privacy-sensitive visual information such as human faces, vehicle license plates, and location-related context. The classification task focuses on transport safety conditions rather than personal identity recognition; no face recognition, identity matching, or individual profiling is performed. Before any public release or operational deployment, privacy-preserving steps such as face and license-plate anonymization, removal of GPS or location metadata, consent and data-governance procedures, and compliance with relevant regulations would be required.
@@ -161,23 +170,23 @@ The pipeline begins with Dhaka bus and leguna image collection, followed by clea
 The complete retraining procedure is summarized below so that data preparation, model fitting, and deployment decisions are defined within the methodology.
 \begin{enumerate}
     \item \textbf{Annotation-based labeling:} Begin with 523 labeled originals containing 272 safe and 251 unsafe images. Assign an image to the unsafe class when at least one annotation box is labeled \texttt{unsafe}; ignore license-plate boxes.
-    \item \textbf{Four-way stratification:} Split the originals 70/15/15 over vehicle type and class, preserving bus-safe, bus-unsafe, leguna-safe, and leguna-unsafe samples in validation and test partitions.
-    \item \textbf{Leakage-free augmentation:} Apply offline augmentation only to the 365 training originals, producing 2,730 training images. Keep the 79-image validation and 79-image test partitions unaugmented.
+    \item \textbf{Four-way stratification:} Split the originals 70/15/15 over vehicle type and class, preserving bus-safe, bus-unsafe, leguna-safe, and leguna-unsafe samples in validation and test partitions. The code does not perform scene-ID, event, or near-duplicate grouping, so this stratification alone does not establish independence at those levels.
+    \item \textbf{Train-only augmentation:} Apply offline augmentation only to the 365 training originals, avoiding augmentation leakage and producing 2,730 training images. Keep the 79-image validation and 79-image test partitions unaugmented.
     \item \textbf{Model-specific preparation:} Extract standardized HOG features followed by PCA for classical models. Supply normalized RGB tensors to the scratch CNN and ImageNet-pretrained transfer-learning models.
-    \item \textbf{Model training:} Train Logistic Regression, Gaussian Naive Bayes, SVM, and the scratch CNN as baselines. Fine-tune ResNet18, EfficientNet-B0, ResNet50, and ConvNeXt-Tiny in two phases. Use weighted sampling and class-weighted loss for deep models.
-    \item \textbf{Validation and ensembling:} Tune balanced, high-recall, and max-recall decision thresholds on validation predictions. Form the final ensemble by averaging ResNet50 and ConvNeXt-Tiny unsafe-class probabilities.
+    \item \textbf{Model training:} Train Logistic Regression, Gaussian Naive Bayes, SVM, and the scratch CNN as baselines. For each pretrained backbone, train the new head alone for the configured warm-up, then unfreeze the entire backbone and continue fine-tuning with discriminative learning rates. Use weighted sampling and the configured weighted cross-entropy or focal loss.
+    \item \textbf{Validation and ensembling:} Tune balanced, high-recall (at least 95\% validation unsafe recall), and max-recall (100\% validation unsafe recall) thresholds on validation predictions. The final model-selection procedure fixes the final ensemble as the probability average of ResNet50 and ConvNeXt-Tiny; this choice and all thresholds are made before test evaluation.
     \item \textbf{Test-time inference:} Apply horizontal-flip test-time augmentation to the deep models, average the resulting probabilities, select the configured operating threshold, and evaluate once on the untouched test set.
 \end{enumerate}
 
 \begin{figure}[!htbp]
     \centering
-    \includegraphics[width=0.92\linewidth,height=0.34\textheight,keepaspectratio]{arch_svm.png}
+    \includegraphics[width=\linewidth,height=0.42\textheight,keepaspectratio]{arch_svm.png}
     \caption{Overview of the HOG-based classical machine-learning pipeline.}
     \label{fig:arch_svm}
 \end{figure}
 
 \subsection{HOG-Based Feature Representation}
-For the classical models, Histogram of Oriented Gradients (HOG) descriptors were extracted from grayscale images \cite{dalal2005hog}. HOG captures local gradient orientation and edge-structure information, which is useful for posture-, shape-, and boundary-related visual classification. Feature extraction was implemented with scikit-image \cite{vanderwalt2014skimage}; Table~\ref{tab:model_config} lists the extraction settings, and Fig.~\ref{fig:arch_svm} shows the full classical pipeline.
+For the classical models, Histogram of Oriented Gradients (HOG) descriptors were extracted from grayscale images \cite{dalal2005hog}. HOG captures local gradient orientation and edge-structure information, which is useful for posture-, shape-, and boundary-related visual classification. Feature extraction was implemented with scikit-image \cite{vanderwalt2014skimage}; Table~\ref{tab:model_config} lists the extraction settings, and Figure~\ref{fig:arch_svm} shows the full classical pipeline.
 
 \subsection{Classical Machine Learning Models}
 The classical baselines use HOG features with three complementary classifiers. Logistic Regression provides a linear probabilistic baseline and estimates the posterior probability of the positive (unsafe) class as
@@ -212,7 +221,7 @@ f(\mathbf{x}) = \sgn\!\left(\sum_{i \in \mathcal{S}} \alpha_i\, y_i\, K(\mathbf{
 where $\mathcal{S}$ indexes the support vectors, $\alpha_i \ge 0$ are the learned dual coefficients, $y_i \in \{-1, +1\}$ are the training labels, and $b$ is the bias. The penalty $C$, kernel width $\gamma$, and kernel type were selected by five-fold grid search on the training data. Table~\ref{tab:model_config} summarizes the implementation settings for all three classical models.
 
 \subsection{Deep Neural Models}
-The deep models process RGB images directly and learn spatial features from the training data \cite{krizhevsky2012alexnet}. The experiments evaluate five neural architectures: a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, and ConvNeXt-Tiny. The scratch CNN provides a lightweight learned-feature baseline, while the other architectures use ImageNet-pretrained weights and two-phase fine-tuning \cite{he2016resnet}, \cite{tan2019efficientnet}, \cite{liu2022convnext}. A probability-level ensemble combines ResNet50 and ConvNeXt-Tiny. All neural models use batch normalization \cite{ioffe2015batchnorm} for stable optimization and dropout \cite{srivastava2014dropout} for regularization. Weighted sampling, class-weighted loss, validation-tuned thresholds, and horizontal-flip test-time augmentation address imbalance and improve unsafe-class recall. Figure~\ref{fig:arch_cnn} shows the scratch CNN architecture and Fig.~\ref{fig:arch_resnet} illustrates the two-phase transfer-learning scheme shared by the pretrained models; Table~\ref{tab:model_config} reports the combined configuration.
+The deep models process RGB images directly and learn spatial features from the training data \cite{krizhevsky2012alexnet}. The experiments evaluate five neural architectures: a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, and ConvNeXt-Tiny. The scratch CNN provides a lightweight learned-feature baseline, while the other architectures use ImageNet-pretrained weights and two-phase fine-tuning \cite{he2016resnet}, \cite{tan2019efficientnet}, \cite{liu2022convnext}. A probability-level ensemble combines ResNet50 and ConvNeXt-Tiny. The scratch CNN uses batch normalization \cite{ioffe2015batchnorm}; dropout is applied where specified in the training configurations \cite{srivastava2014dropout}. Weighted sampling, weighted loss, validation-tuned thresholds, and horizontal-flip test-time augmentation address imbalance and improve unsafe-class recall. Figure~\ref{fig:arch_cnn} shows the scratch CNN architecture and Figure~\ref{fig:arch_resnet} illustrates the two-phase transfer-learning scheme shared by the pretrained models; Table~\ref{tab:model_config} reports the combined configuration.
 
 \begin{figure}[!htbp]
     \centering
@@ -223,23 +232,23 @@ The deep models process RGB images directly and learn spatial features from the 
 
 \begin{figure}[!htbp]
     \centering
-    \includegraphics[width=0.92\linewidth,height=0.36\textheight,keepaspectratio]{arch_resnet.png}
-    \caption{Two-phase transfer-learning scheme, illustrated with ResNet18. The ImageNet-pretrained backbone is frozen during a short head-only warm-up, its deepest stage is then unfrozen for fine-tuning, and a new classifier head is trained from scratch. ResNet50, EfficientNet-B0, and ConvNeXt-Tiny follow the same procedure at a $224\times224$ input resolution.}
+    \includegraphics[width=0.98\linewidth,height=0.45\textheight,keepaspectratio]{arch_resnet.png}
+    \caption{Two-phase transfer-learning scheme, illustrated with ResNet18. The ImageNet-pretrained backbone is frozen during head-only warm-up; after warm-up, all backbone parameters are unfrozen and fine-tuned with a lower learning rate than the new classifier head. ResNet50, EfficientNet-B0, and ConvNeXt-Tiny follow the same procedure at a $224\times224$ input resolution.}
     \label{fig:arch_resnet}
 \end{figure}
 
 \section{Experimental Setup}
 \subsection{Split Protocol}
-The data split followed a four-way stratified protocol over vehicle type and class, producing 70/15/15 training, validation, and test partitions. This ensures that bus-safe, bus-unsafe, leguna-safe, and leguna-unsafe samples occur in both validation and test sets. Augmentation was applied only after splitting and only to training originals. Thresholds were tuned on validation predictions, while the 79-image test set remained untouched until final evaluation. The ensemble members (ResNet50 and ConvNeXt-Tiny) and all decision thresholds were fixed on the validation set before any test-set evaluation, so the test set was used exactly once and never for model selection, ensemble construction, or threshold tuning. The full nine-model test table is reported for transparency and did not drive the choice of the deployed model.
+The data split followed a four-way stratified protocol over vehicle type and class, producing 70/15/15 training, validation, and test partitions. This ensures that bus-safe, bus-unsafe, leguna-safe, and leguna-unsafe samples occur in both validation and test sets. Augmentation was applied only after splitting and only to training originals. Thresholds were tuned on validation predictions, while the 79-image test set remained untouched until final evaluation. The final model-selection procedure fixes ResNet50 and ConvNeXt-Tiny as ensemble members and derives the balanced, high-recall, and max-recall thresholds from validation predictions before test scoring; the test set was not used for threshold tuning or ensemble construction. The full nine-model test table is reported for transparency.
 
 \subsection{Model Configuration}
-The experiments were implemented in Python using scikit-learn for the classical pipelines \cite{pedregosa2011sklearn}, PyTorch for the neural model \cite{paszke2019pytorch}, and scikit-image for image processing \cite{vanderwalt2014skimage}. A fixed random seed of 42 was used for reproducibility. Model and preprocessing settings are consolidated in Table~\ref{tab:model_config}.
+The experiments were implemented in Python using scikit-learn for the classical pipelines \cite{pedregosa2011sklearn}, PyTorch for the neural model \cite{paszke2019pytorch}, and scikit-image for image processing \cite{vanderwalt2014skimage}. The training script records the seeds for each candidate run; model and preprocessing settings are consolidated in Table~\ref{tab:model_config}.
 
 \begin{table}[!htbp]
 \centering
 \caption{Model Configuration}
 \label{tab:model_config}
-\scriptsize
+\footnotesize
 \renewcommand{\arraystretch}{0.88}
 \setlength{\tabcolsep}{3pt}
 \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.25\linewidth} >{\raggedright\arraybackslash}p{0.17\linewidth} >{\raggedright\arraybackslash}X}
@@ -252,16 +261,18 @@ Logistic Regression & HOG features & StandardScaler and PCA (95\% variance retai
 Gaussian Naive Bayes & HOG features & StandardScaler and PCA (95\% variance retained) on training data, then Gaussian Naive Bayes. \\
 SVM with RBF kernel & HOG features & StandardScaler and PCA (95\% variance retained) on training data; RBF-kernel SVM with penalty $C$, kernel width $\gamma$, and kernel selected by 5-fold \texttt{GridSearchCV} (balanced class weights, probability estimates enabled). \\
 CNN (from scratch) & RGB $128\times128$ & Four convolutional blocks (32/64/128/256 channels) with batch normalization and ReLU, global average pooling, dropout, and a two-layer linear head; about 1.2M parameters. \\
-ResNet18 & RGB $224\times224$ & ImageNet-pretrained residual network, two-phase fine-tuning. \\
-EfficientNet-B0 & RGB $224\times224$ & ImageNet-pretrained compound-scaled network, two-phase fine-tuning. \\
-ResNet50 & RGB $224\times224$ & Deeper ImageNet-pretrained residual network, two-phase fine-tuning, horizontal-flip TTA. \\
-ConvNeXt-Tiny & RGB $224\times224$ & ImageNet-pretrained modern convolutional network, two-phase fine-tuning, horizontal-flip TTA. \\
+ResNet18 & RGB $224\times224$ & ImageNet V1; two-phase full-backbone fine-tuning; hflip TTA. \\
+EfficientNet-B0 & RGB $224\times224$ & ImageNet V1; two-phase full-backbone fine-tuning; hflip TTA. \\
+ResNet50 & RGB $224\times224$ & ImageNet V2; two-phase full-backbone fine-tuning; hflip TTA. \\
+ConvNeXt-Tiny & RGB $224\times224$ & ImageNet V1; two-phase full-backbone fine-tuning; hflip TTA. \\
 Ensemble & RGB $224\times224$ & Probability-level average of ResNet50 and ConvNeXt-Tiny, with balanced, high-recall, and max-recall thresholds tuned on validation. \\
-Deep-model training & RGB tensors & AdamW optimizer, cosine-annealing learning rate, two-phase schedule (head-only warm-up for about 5 epochs, then full-network fine-tuning), batch size 24--32, 45--70 epochs, label smoothing 0.05, dropout 0.4, weighted sampling, and class-weighted or focal loss for imbalance. \\
+Deep-model training & RGB tensors & Common protocol and recorded candidate-run settings are documented below; the checkpoint-selection rule is highest validation balanced accuracy, but the exact winning configuration is not recoverable from the saved artifacts. \\
 Evaluation protocol & \shortstack[l]{Train/\\validation/test} & Four-way stratified 70/15/15 split; 365 training originals expanded to 2,730 train images, with 79 unaugmented validation and 79 untouched test images. \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+The final protocol used ImageNet-pretrained transfer backbones with a head-only warm-up followed by full-backbone fine-tuning, AdamW, cosine annealing, weighted sampling, horizontal-flip TTA, and checkpoint selection by validation balanced accuracy. The training records document candidate configurations, including batch sizes of 24 or 32, 45--70 total epochs, 5 or 6 warm-up epochs, model-specific learning rates and weight decay, dropout, label smoothing, and focal-loss alternatives.
 
 For HOG-based models, preprocessing and dimensionality-reduction steps were fitted on the training data and then applied to validation and test data. Deep models used normalized RGB image tensors rather than HOG descriptors.
 
@@ -302,12 +313,12 @@ The coefficient ranges from $-1$ to $+1$. A value of $+1$ represents perfect agr
 \begin{equation}
 \mathrm{AP} = \sum_{n} \left(R_n - R_{n-1}\right) P_n, \label{eq:ap}
 \end{equation}
-where $P_n$ and $R_n$ are the precision and recall at the $n$-th threshold; its no-skill baseline equals the unsafe-class prevalence, which makes it informative for the safety-critical positive class. Because missed unsafe cases have direct safety implications, unsafe-class recall is emphasized alongside overall accuracy, MCC, and AUC. Given the small test set, uncertainty is reported as 95\% Wilson score intervals, and pairwise differences between the strongest models are assessed with McNemar's exact test.
+where $P_n$ and $R_n$ are the precision and recall at the $n$-th threshold; its no-skill baseline equals the unsafe-class prevalence, which makes it informative for the safety-critical positive class. Because missed unsafe cases have direct safety implications, unsafe-class recall is emphasized alongside overall accuracy, MCC, and AUC. Given the small test set, uncertainty is reported as 95\% Wilson score intervals, and pairwise differences between the strongest models are assessed with McNemar's exact test. For the ensemble, unsafe recall is $36/38=94.7\%$, with a 95\% Wilson interval of $[82.7\%,98.5\%]$.
 
 
 \section{Results}
 \subsection{Quantitative Comparison}
-Table~\ref{tab:test_results} reports balanced operating-point performance on the untouched 79-image test set. The ResNet50--ConvNeXt ensemble reaches 0.861 accuracy, 0.947 unsafe recall, and 0.970 ROC-AUC. ResNet50 attains the highest single-model accuracy (0.924) and MCC (0.848), while EfficientNet-B0 attains the highest unsafe recall (0.974) and ROC-AUC (0.979). All nine models are compared in Fig.~\ref{fig:paper_model_comparison}.
+Table~\ref{tab:test_results} reports balanced operating-point performance on the untouched 79-image test set. The ResNet50--ConvNeXt ensemble reaches 0.861 accuracy, 0.947 unsafe recall, and 0.970 ROC-AUC. ResNet50 attains the highest single-model accuracy (0.924) and MCC (0.848), while EfficientNet-B0 attains the highest unsafe recall (0.974) and ROC-AUC (0.979). All nine models are compared in Figure~\ref{fig:paper_model_comparison}.
 
 \begin{table}[!htbp]
 \centering
@@ -336,13 +347,13 @@ Naive Bayes & 0.734 & 0.734 & 0.737 & 0.718 & 0.732 & 0.727 & 0.866 & 0.884 & 0.
 
 \begin{figure}[!htbp]
     \centering
-    \includegraphics[width=0.94\linewidth,height=0.27\textheight,keepaspectratio]{figures/fig02_model_comparison.png}
+    \includegraphics[width=0.98\linewidth,height=0.34\textheight,keepaspectratio]{figures/fig02_model_comparison.png}
     \caption{Held-out test comparison of accuracy, unsafe recall, unsafe $F_1$, and ROC-AUC across all nine reported models.}
     \label{fig:paper_model_comparison}
 \end{figure}
 
 \subsection{ROC and AUC Analysis}
-AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_roc_test} shows held-out ROC curves for all reported models, and Fig.~\ref{fig:paper_pr_curves} shows the corresponding precision--recall curves.
+AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_roc_test} shows held-out ROC curves for all reported models, and Figure~\ref{fig:paper_pr_curves} shows the corresponding precision--recall curves.
 
 \begin{figure}[!htbp]
     \centering
@@ -356,11 +367,11 @@ AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_r
 \end{figure}
 
 \subsection{Error Analysis}
-False negatives are the most safety-critical error type because they correspond to unsafe/risky hanging-travel cases predicted as safe/normal. At the balanced operating point, the ensemble detects 94.7\% of unsafe test images, missing only 2 of 38 hangers. Because the retrained dataset is close to balanced, the tuned balanced, high-recall, and max-recall thresholds fall within 0.006 of one another, so all three settle at the same operating point of 86.1\% accuracy and 94.7\% unsafe recall. The earlier regime, in which perfect recall could only be bought at low accuracy, no longer appears: the additional unsafe training data lets the ensemble reach high recall without sacrificing accuracy. Table~\ref{tab:operating_modes} lists the three modes, and Fig.~\ref{fig:operating_analysis} shows the threshold trade-off.
+False negatives are the most safety-critical error type because they correspond to unsafe/risky hanging-travel cases predicted as safe/normal. At the balanced operating point, the ensemble detects 94.7\% of unsafe test images, missing only 2 of 38 unsafe test images. The balanced, high-recall, and max-recall thresholds are respectively 0.170, 0.175, and 0.175, all tuned on validation; they happen to produce the same rounded test result. Table~\ref{tab:operating_modes} lists the three modes, and Figure~\ref{fig:operating_analysis} shows the threshold trade-off.
 
 \begin{table}[!htbp]
 \centering
-\caption{Selectable operating points for the deployed ensemble. On the near-balanced retrained data the three tuned thresholds nearly coincide, so the modes report the same test operating point.}
+\caption{Selectable operating points for the deployed ensemble. All thresholds are tuned on validation; the displayed test metrics are evaluated afterward.}
 \label{tab:operating_modes}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -379,37 +390,35 @@ Max recall & 0.175 & 0.861 & 0.947 & 0.800 & 0.780 \\
 
 \begin{figure}[!htbp]
     \centering
-    \includegraphics[width=0.94\linewidth,height=0.27\textheight,keepaspectratio]{figures/fig06_tradeoff.png}
+    \includegraphics[width=0.98\linewidth,height=0.34\textheight,keepaspectratio]{figures/fig06_tradeoff.png}
     \caption{Ensemble threshold behavior on the held-out test set: accuracy and unsafe recall against the decision threshold, with the operating points selected from validation predictions marked. Because the retrained dataset is near-balanced, the three points nearly coincide.}
     \label{fig:operating_analysis}
 \end{figure}
 
-\FloatBarrier
-\Needspace{8\baselineskip}
 \section{Discussion}
 \subsection{Interpretation of Results}
-The retrained ensemble provides a strong, recall-oriented balanced operating point, reaching 86.1\% test accuracy, 94.7\% unsafe recall, 0.867 unsafe $F_1$, 0.970 ROC-AUC, and 0.978 PR-AUC. The additional unsafe training data supports strong ranking performance while the small test set warrants cautious interpretation of the estimate.
+The retrained ensemble provides a strong, recall-oriented balanced operating point, reaching 86.1\% test accuracy, 94.7\% unsafe recall, 0.867 unsafe $F_1$, 0.970 ROC-AUC, and 0.978 PR-AUC. The current run shows strong ranking performance, while the small test set warrants cautious interpretation of the estimate.
 
 Among individual deep models, ResNet50 leads on accuracy (92.4\%) with balanced 92.1\% unsafe precision and recall, while EfficientNet-B0 reaches the highest unsafe recall (97.4\%) and the top ROC-AUC (0.979). Among classical models, SVM remains the strongest HOG baseline, reaching 87.3\% accuracy, 89.5\% unsafe recall, and 0.952 AUC.
 
-We deploy the ResNet50--ConvNeXt ensemble rather than the single most accurate model because the two error types carry asymmetric cost: a false negative, a missed hanging passenger, is more consequential than a false alarm. The ensemble attains 94.7\% unsafe recall, above ResNet50's 92.1\%, and averaging two backbones yields probabilities that are more stable across the operating thresholds than any single network. EfficientNet-B0 reaches an even higher unsafe recall (97.4\%) and is a strong recall-oriented alternative, but its lower balanced accuracy (83.5\%) produces more false alarms, so the ensemble was retained for its better accuracy--recall balance.
+The deployed configuration uses the ResNet50--ConvNeXt ensemble because the final model-selection procedure fixes these two architecturally different transfer backbones before test evaluation and averages their unsafe-class probabilities. This is consistent with the safety-oriented objective of prioritizing unsafe recall while retaining acceptable discrimination. On the test set, the ensemble reaches 94.7\% unsafe recall, compared with ResNet50's 92.1\%; EfficientNet-B0 reaches 97.4\% unsafe recall but has lower balanced accuracy (83.5\%). These test-set comparisons are descriptive and were not used to select the ensemble.
 
 Gaussian Naive Bayes underperforms because its conditional-independence assumption is poorly matched to HOG descriptors. Neighboring gradient bins and block-normalized features are correlated by construction, so treating them as independent weakens the model's ability to distinguish visually similar safe/normal and unsafe/risky scenes.
 
-The train-to-test gaps in Table~\ref{tab:generalization} range from 6.7 to 16.5 percentage points. Logistic Regression has the smallest gap, while ConvNeXt-Tiny has the largest. These gaps indicate that the expanded set of unique originals reduces overfitting, even though it does not remove it entirely. Figure~\ref{fig:generalization_analysis} visualizes the per-model train, validation, and test error and the train-to-test gap.
+The train-to-test gaps in Table~\ref{tab:generalization} range from 6.7 to 16.5 percentage points. Logistic Regression has the smallest gap, while ConvNeXt-Tiny has the largest. These current-run gaps show that performance differs between the training and held-out partitions; they do not, by themselves, support a before-and-after claim about reduced overfitting. Figure~\ref{fig:generalization_analysis} visualizes the per-model train, validation, and test error and the train-to-test gap.
 
 For this application, false negatives are more consequential than ordinary classification errors because they correspond to missed risky travel conditions. Precision and overall accuracy remain relevant for reducing false alarms, but a safety-oriented monitoring system should prioritize reducing missed unsafe cases while maintaining acceptable discrimination across normal and risky scenes.
 
 \subsection{Limitations}
-The main limitation of this study is the limited number of unique source images. The updated dataset contains 523 labeled originals with 251 unsafe cases, which is still not enough to fully cover the diversity of vehicle layouts, camera viewpoints, passenger postures, weather, illumination, and traffic environments encountered in deployment. With only 79 test images, individual metrics carry wide uncertainty: a 95\% Wilson score interval on the ensemble's 86.1\% accuracy spans $[76.8, 92.0]\%$. A McNemar exact test finds no significant difference among the strongest models (for example, ResNet50 versus the ensemble gives $p = 0.125$ and ResNet50 versus ResNet18 gives $p = 1.0$), so these models are statistically indistinguishable on this test set, and the per-metric maxima in Table~\ref{tab:test_results} should be read as descriptive rather than as proof of a single definitively best model. Because nine models are compared on one split, the top scores are also subject to selection (``winner's-curse'') optimism, and the reported interval captures only test-set sampling noise, not train/validation-split or random-seed variability. Cross-validated or repeated-seed evaluation would tighten these estimates and is left to future work.
+The main limitation of this study is the limited number of unique source images. The updated dataset contains 523 labeled originals with 251 unsafe cases, which is still not enough to fully cover the diversity of vehicle layouts, camera viewpoints, passenger postures, weather, illumination, and traffic environments encountered in deployment. With only 79 test images, individual metrics carry wide uncertainty: a 95\% Wilson score interval on the ensemble's 86.1\% accuracy spans $[76.8, 92.0]\%$. A McNemar exact test finds no significant difference among the strongest models (for example, ResNet50 versus the ensemble gives $p = 0.125$ and ResNet50 versus ResNet18 gives $p = 1.0$), so these models are statistically indistinguishable on this test set, and the per-metric maxima in Table~\ref{tab:test_results} should be read as descriptive rather than as proof of a single definitively best model. Because nine models are compared on one split, the top scores are also subject to selection (``winner's-curse'') optimism, and the reported interval captures only test-set sampling noise, not train/validation-split or random-seed variability. Cross-validated or repeated-seed evaluation would tighten these estimates and is left to future work. Exact winning configurations for the reported deep models are not recoverable from the saved artifacts; Table~\ref{tab:model_config} therefore documents the common protocol and recorded candidate-run settings.
 
-The neural models also depend on training-time augmentation to increase effective sample diversity. Augmentation makes the models less sensitive to controlled transformations, but it does not replace additional real images containing natural occlusion, motion blur, dense crowding, and non-standard bus or leguna structures. These factors can make unsafe/risky positive cases difficult to distinguish from visually cluttered safe/normal scenes.
+The neural models also depend on training-time augmentation to increase effective sample diversity. Augmentation makes the models less sensitive to controlled transformations, but it does not replace additional real images containing natural occlusion, motion blur, dense crowding, and non-standard bus or leguna structures. These factors can make unsafe/risky positive cases difficult to distinguish from visually cluttered safe/normal scenes. In addition, the split code stratifies by vehicle type and class but does not group by scene, event, or near-duplicate identity; residual dependence across partitions therefore cannot be ruled out from the repository evidence.
 
 The current system is limited to image-level binary classification. It does not localize hanging passengers, estimate crowd density, track passengers across frames, or evaluate performance on large-scale real-time video streams. Roadside transport images may also include identifiable people, license plates, and location cues, so deployment would require anonymization and data-governance safeguards. The method should therefore be interpreted as a baseline for visual safety classification rather than an operational monitoring system.
 
-\begin{table}[!htbp]
+\begin{figure}[!htbp]
 \centering
-\caption{Train, Validation, and Test Generalization}
+\captionof{table}{Train, Validation, and Test Generalization}
 \label{tab:generalization}
 \footnotesize
 \setlength{\tabcolsep}{2pt}
@@ -428,19 +437,16 @@ SVM (RBF) & 0.999 & 0.001 & 0.861 & 0.139 & 0.873 & 0.127 & 0.895 \\
 Logistic Regression & 0.877 & 0.123 & 0.772 & 0.228 & 0.810 & 0.190 & 0.816 \\
 Naive Bayes & 0.832 & 0.168 & 0.810 & 0.190 & 0.734 & 0.266 & 0.737 \\
 \bottomrule
-\end{tabular}
-}
-\end{table}
-
-\begin{figure}[!htbp]
-    \centering
-    \subfloat[Train, validation, and test error.\label{fig:generalization_error}]{%
-        \includegraphics[width=0.96\linewidth,height=0.24\textheight,keepaspectratio]{figures/fig07_train_val_test_error.png}}
-    \par\smallskip
-    \subfloat[Train-to-test generalization gap.\label{fig:generalization_gap}]{%
-        \includegraphics[width=0.96\linewidth,height=0.24\textheight,keepaspectratio]{figures/fig08_generalization_gap.png}}
-    \caption{Generalization behavior of all nine models after retraining.}
-    \label{fig:generalization_analysis}
+\end{tabular}}
+\par\medskip
+\subfloat[Train, validation, and test error.\label{fig:generalization_error}]{%
+    \includegraphics[width=\linewidth,height=0.32\textheight,keepaspectratio]{figures/fig07_train_val_test_error.png}}
+\par\smallskip
+\subfloat[Train-to-test generalization gap.\label{fig:generalization_gap}]{%
+    \includegraphics[width=\linewidth,height=0.32\textheight,keepaspectratio]{figures/fig08_generalization_gap.png}}
+\captionsetup{type=figure}
+\caption{Generalization behavior of all nine models after retraining.}
+\label{fig:generalization_analysis}
 \end{figure}
 
 \FloatBarrier
@@ -450,7 +456,7 @@ This paper developed a computer-vision and machine-learning pipeline for detecti
 The updated result set compares classical models (Logistic Regression, Gaussian Naive Bayes, and SVM with an RBF kernel) with deep models (a CNN trained from scratch, ResNet18, EfficientNet-B0, ResNet50, ConvNeXt-Tiny, and a ResNet50--ConvNeXt ensemble). On the untouched test set, the deployed ensemble reaches a recall-oriented balanced result with 86.1\% accuracy, 94.7\% unsafe recall, and 0.970 ROC-AUC, while ResNet50 gives the highest single-model accuracy at 92.4\%. Because the retrained data is near-balanced, the balanced, high-recall, and max-recall thresholds coincide at the same 86.1\%-accuracy and 94.7\%-recall operating point rather than trading accuracy for a separate perfect-recall mode.
 
 
-As a practical outcome of this work, we developed an online platform that classifies public-transport images as safe/normal or unsafe/risky. The project resources are publicly accessible through the \href{https://github.com/TanzilaKhan1/Detection-of-Hanging-Passengers/}{source-code repository}, the \href{https://drive.google.com/drive/folders/1D3jDBvA-cAhwRPA4wUBUss5zlwdXdLJY?usp=drive_link}{project dataset}, and the \href{https://ml-predictor-app.streamlit.app/}{deployed web platform}.
+As a practical outcome of this work, we developed an online platform that classifies public-transport images as safe/normal or unsafe/risky. The project resources are publicly accessible through the \href{https://github.com/TanzilaKhan1/Detection-of-Hanging-Passengers/}{source-code repository}, \href{https://data.mendeley.com/datasets/24n4zpdt69/1}{Mendeley Data}, and the \href{https://ml-predictor-app.streamlit.app/}{deployed web platform}.
 
 
 Future work should focus on collecting a larger localized dataset, improving recall for unsafe hanging travel, evaluating the system on real-time video streams, and designing privacy-aware deployment procedures. Detection-based models such as YOLO \cite{redmon2016yolo} should also be tested to localize hanging passengers rather than only classify whole images. License-plate recognition could be incorporated in future work to identify vehicles after an unsafe condition has been detected.
@@ -462,187 +468,187 @@ Future work should focus on collecting a larger localized dataset, improving rec
 E. Dilek and M. Dener,
 ``Computer Vision Applications in Intelligent Transportation Systems: A Survey,''
 \textit{Sensors}, vol. 23, no. 6, 2938, 2023.\\
-Available: \url{https://www.mdpi.com/1424-8220/23/6/2938}
+\url{https://www.mdpi.com/1424-8220/23/6/2938}
 
 \bibitem{hsu2020passenger}
 Y.-W. Hsu, T.-Y. Wang, and J.-W. Perng,
 ``Passenger flow counting in buses based on deep learning using surveillance video,''
 \textit{Optik}, vol. 202, 163675, 2020.\\
-Available: \url{https://www.sciencedirect.com/science/article/abs/pii/S0030402619315736}
+\url{https://www.sciencedirect.com/science/article/abs/pii/S0030402619315736}
 
 \bibitem{barua2013brt}
 S. Barua, M. Seraj, and D. Alam,
 ``Opportunities and Operational Difficulties of Introducing Bus Rapid Transit (BRT) in Dhaka,''
 in \textit{Urban Public Transportation Systems 2013}, American Society of Civil Engineers, 2013, pp. 168-178.\\
-Available: \url{https://doi.org/10.1061/9780784413210.016}
+\href{https://doi.org/10.1061/9780784413210.016}{doi: 10.1061/9780784413210.016}
 
 \bibitem{crowding2023review}
 Z. Li and D. A. Hensher,
 ``Crowding in Public Transport: A Review of Objective and Subjective Measures,''
 \textit{Journal of Public Transportation}, vol. 16, no. 2, pp. 107-134, 2013.\\
-Available: \url{https://doi.org/10.5038/2375-0901.16.2.6}
+\href{https://doi.org/10.5038/2375-0901.16.2.6}{doi: 10.5038/2375-0901.16.2.6}
 
 \bibitem{wastupranata2024abnormal}
 L. M. Wastupranata, S. G. Kong, and L. Wang,
 ``Deep Learning for Abnormal Human Behavior Detection in Surveillance Videos---A Survey,''
 \textit{Electronics}, vol. 13, no. 13, 2579, 2024.\\
-Available: \url{https://www.mdpi.com/2079-9292/13/13/2579}
+\url{https://www.mdpi.com/2079-9292/13/13/2579}
 
 \bibitem{redmon2016yolo}
 J. Redmon, S. Divvala, R. Girshick, and A. Farhadi,
 ``You Only Look Once: Unified, Real-Time Object Detection,''
 in \textit{IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, 2016, pp. 779-788.\\
-Available: \url{https://arxiv.org/abs/1506.02640}
+\href{https://arxiv.org/abs/1506.02640}{arXiv:1506.02640}
 
 \bibitem{yolo2024boarding}
 W. Xu, Y. Zhao, X. Du, H. Ji, and L. Xing,
 ``A Study on Bus Passenger Boarding and Alighting Detection and Recognition Based on Video Images and YOLO Algorithm,''
 \textit{Sensors}, vol. 26, no. 5, 1418, 2026.\\
-Available: \url{https://doi.org/10.3390/s26051418}
+\href{https://doi.org/10.3390/s26051418}{doi: 10.3390/s26051418}
 
 \bibitem{tseng2022bus}
 C.-H. Tseng and H.-Y. Lin,
 ``A Vision-Based System for Abnormal Behavior Detection and Recognition of Bus Passengers,''
 in \textit{2022 IEEE 25th International Conference on Intelligent Transportation Systems (ITSC)}, 2022, pp. 1-6.\\
-Available: \url{https://doi.org/10.1109/ITSC55140.2022.9921801}
+\href{https://doi.org/10.1109/ITSC55140.2022.9921801}{doi: 10.1109/ITSC55140.2022.9921801}
 
 \bibitem{lin2024bus}
 H.-Y. Lin and C.-H. Tseng,
 ``Abnormal Activity Detection and Classification of Bus Passengers With In-Vehicle Image Sensing,''
 \textit{IEEE Access}, vol. 12, pp. 23057-23065, 2024.\\
-Available: \url{https://doi.org/10.1109/ACCESS.2024.3365138}
+\href{https://doi.org/10.1109/ACCESS.2024.3365138}{doi: 10.1109/ACCESS.2024.3365138}
 
 \bibitem{liu2025bus}
 S. Liu, Y. Bi, Q. Li, Y. Ren, H. Ji, and L. Wang,
 ``A deep learning based detection algorithm for anomalous behavior and anomalous item on buses,''
 \textit{Scientific Reports}, vol. 15, art. 2163, 2025.\\
-Available: \url{https://doi.org/10.1038/s41598-025-85962-8}
+\href{https://doi.org/10.1038/s41598-025-85962-8}{doi: 10.1038/s41598-025-85962-8}
 
 \bibitem{ramirez2025posture}
 H. Ramirez, S. Seriani, V. Aprigliano, A. Pe\~na, B. Arredondo, I. Bastias, and G. Farias,
 ``Posture Detection of Passengers' Movement When Boarding and Alighting an Urban Bus: A Pilot Study in Valpara\'iso, Chile,''
 \textit{Applied Sciences}, vol. 15, no. 10, 5367, 2025.\\
-Available: \url{https://doi.org/10.3390/app15105367}
+\href{https://doi.org/10.3390/app15105367}{doi: 10.3390/app15105367}
 
 \bibitem{anagnostopoulos2008license}
 C. N. E. Anagnostopoulos, I. E. Anagnostopoulos, I. D. Psoroulas, V. Loumos, and E. Kayafas,
 ``License Plate Recognition From Still Images and Video Sequences: A Survey,''
 \textit{IEEE Transactions on Intelligent Transportation Systems}, vol. 9, no. 3, pp. 377-391, 2008.\\
-Available: \url{https://doi.org/10.1109/TITS.2008.922938}
+\href{https://doi.org/10.1109/TITS.2008.922938}{doi: 10.1109/TITS.2008.922938}
 
 \bibitem{silva2018license}
 S. M. Silva and C. R. Jung,
 ``License Plate Detection and Recognition in Unconstrained Scenarios,''
 in \textit{European Conference on Computer Vision (ECCV)}, 2018, pp. 593-609.\\
-Available: \url{https://link.springer.com/chapter/10.1007/978-3-030-01258-8_36}
+\url{https://link.springer.com/chapter/10.1007/978-3-030-01258-8_36}
 
 \bibitem{du2013automatic}
 S. Du, M. Ibrahim, M. Shehata, and W. Badawy,
 ``Automatic License Plate Recognition (ALPR): A State-of-the-Art Review,''
 \textit{IEEE Transactions on Circuits and Systems for Video Technology}, vol. 23, no. 2, pp. 311-325, 2013.\\
-Available: \url{https://doi.org/10.1109/TCSVT.2012.2203741}
+\href{https://doi.org/10.1109/TCSVT.2012.2203741}{doi: 10.1109/TCSVT.2012.2203741}
 
 \bibitem{afrin2023bengali}
 N. Afrin, M. M. Hasan, M. F. E. Safin, K. R. Amin, M. Z. Haque, F. Ahmed, and M. T. R. Shawon,
 ``Bengali License Plate Recognition: Unveiling Clarity with CNN and GFP-GAN,''
 in \textit{26th International Conference on Computer and Information Technology (ICCIT)}, Cox's Bazar, Bangladesh, 2023, pp. 1-6.\\
-Available: \url{https://arxiv.org/abs/2312.10701}
+\href{https://arxiv.org/abs/2312.10701}{arXiv:2312.10701}
 
 \bibitem{tabassum2020poribohon}
 S. Tabassum, S. Ullah, N. H. Al-nur, and S. Shatabda,
 ``Poribohon-BD: Bangladeshi local vehicle image dataset with annotation for classification,''
 \textit{Data in Brief}, vol. 33, 106465, 2020.\\
-Available: \url{https://doi.org/10.1016/j.dib.2020.106465}
+\href{https://doi.org/10.1016/j.dib.2020.106465}{doi: 10.1016/j.dib.2020.106465}
 
 \bibitem{indhumathi2024footboard}
 N. Indhumathi, S. Maheswaran, M. Shunmuganantha, P. A. Vikash, and R. S. Vimal Raj,
 ``Bus Foot Board Control Using IoT,''
 in \textit{2024 15th International Conference on Computing Communication and Networking Technologies (ICCCNT)}, 2024, pp. 1-6.\\
-Available: \url{https://doi.org/10.1109/ICCCNT61001.2024.10725076}
+\href{https://doi.org/10.1109/ICCCNT61001.2024.10725076}{doi: 10.1109/ICCCNT61001.2024.10725076}
 
 \bibitem{shorten2019augmentation}
 C. Shorten and T. M. Khoshgoftaar,
 ``A survey on Image Data Augmentation for Deep Learning,''
 \textit{Journal of Big Data}, vol. 6, art. 60, 2019.\\
-Available: \url{https://link.springer.com/article/10.1186/s40537-019-0197-0}
+\url{https://link.springer.com/article/10.1186/s40537-019-0197-0}
 
 \bibitem{dalal2005hog}
 N. Dalal and B. Triggs,
 ``Histograms of Oriented Gradients for Human Detection,''
 in \textit{IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, 2005, pp. 886-893.\\
-Available: \url{https://lear.inrialpes.fr/people/triggs/pubs/Dalal-cvpr05.pdf}
+\url{https://lear.inrialpes.fr/people/triggs/pubs/Dalal-cvpr05.pdf}
 
 \bibitem{vanderwalt2014skimage}
-S. van der Walt, J. L. Sch\"onberger, J. Nunez-Iglesias, F. Boulogne, J. D. Warner, N. Yager, E. Gouillart, and T. Yu,
+S. van der Walt, J. L. Sch\"onberger, J. N\'u\~nez-Iglesias, F. Boulogne, J. D. Warner, N. Yager, E. Gouillart, and T. Yu,
 ``scikit-image: image processing in Python,''
 \textit{PeerJ}, vol. 2, e453, 2014.\\
-Available: \url{https://peerj.com/articles/453/}
+\url{https://peerj.com/articles/453/}
 
 \bibitem{cortes1995svm}
 C. Cortes and V. Vapnik,
 ``Support-Vector Networks,''
 \textit{Machine Learning}, vol. 20, no. 3, pp. 273-297, 1995.\\
-Available: \url{https://link.springer.com/article/10.1007/BF00994018}
+\url{https://link.springer.com/article/10.1007/BF00994018}
 
 \bibitem{krizhevsky2012alexnet}
 A. Krizhevsky, I. Sutskever, and G. E. Hinton,
 ``ImageNet Classification with Deep Convolutional Neural Networks,''
 in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, vol. 25, 2012, pp. 1097-1105.\\
-Available: \url{https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks}
+\url{https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks}
 
 \bibitem{he2016resnet}
 K. He, X. Zhang, S. Ren, and J. Sun,
 ``Deep Residual Learning for Image Recognition,''
 in \textit{IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, 2016, pp. 770-778.\\
-Available: \url{https://arxiv.org/abs/1512.03385}
+\href{https://arxiv.org/abs/1512.03385}{arXiv:1512.03385}
 
 \bibitem{tan2019efficientnet}
 M. Tan and Q. V. Le,
 ``EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks,''
 in \textit{International Conference on Machine Learning (ICML)}, 2019, pp. 6105-6114.\\
-Available: \url{https://arxiv.org/abs/1905.11946}
+\href{https://arxiv.org/abs/1905.11946}{arXiv:1905.11946}
 
 \bibitem{liu2022convnext}
 Z. Liu, H. Mao, C.-Y. Wu, C. Feichtenhofer, T. Darrell, and S. Xie,
 ``A ConvNet for the 2020s,''
 in \textit{IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, 2022, pp. 11966-11976.\\
-Available: \url{https://arxiv.org/abs/2201.03545}
+\href{https://arxiv.org/abs/2201.03545}{arXiv:2201.03545}
 
 \bibitem{ioffe2015batchnorm}
 S. Ioffe and C. Szegedy,
 ``Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift,''
 in \textit{International Conference on Machine Learning (ICML)}, 2015, pp. 448-456.\\
-Available: \url{https://arxiv.org/abs/1502.03167}
+\href{https://arxiv.org/abs/1502.03167}{arXiv:1502.03167}
 
 \bibitem{srivastava2014dropout}
 N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhutdinov,
 ``Dropout: A Simple Way to Prevent Neural Networks from Overfitting,''
 \textit{Journal of Machine Learning Research}, vol. 15, pp. 1929-1958, 2014.\\
-Available: \url{https://jmlr.org/papers/v15/srivastava14a.html}
+\url{https://jmlr.org/papers/v15/srivastava14a.html}
 
 \bibitem{chicco2020mcc}
 D. Chicco and G. Jurman,
 ``The advantages of the Matthews correlation coefficient (MCC) over F1 score and accuracy in binary classification evaluation,''
 \textit{BMC Genomics}, vol. 21, art. 6, 2020.\\
-Available: \url{https://doi.org/10.1186/s12864-019-6413-7}
+\href{https://doi.org/10.1186/s12864-019-6413-7}{doi: 10.1186/s12864-019-6413-7}
 
 \bibitem{pedregosa2011sklearn}
 F. Pedregosa et al.,
 ``Scikit-learn: Machine Learning in Python,''
 \textit{Journal of Machine Learning Research}, vol. 12, pp. 2825-2830, 2011.\\
-Available: \url{https://jmlr.org/papers/v12/pedregosa11a.html}
+\url{https://jmlr.org/papers/v12/pedregosa11a.html}
 
 \bibitem{paszke2019pytorch}
 A. Paszke et al.,
 ``PyTorch: An Imperative Style, High-Performance Deep Learning Library,''
 in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, vol. 32, 2019, pp. 8024-8035.\\
-Available: \url{https://papers.nips.cc/paper/9015-pytorch-an-imperative-style-high-performance-deep-learning-library}
+\url{https://papers.nips.cc/paper/9015-pytorch-an-imperative-style-high-performance-deep-learning-library}
 
 \bibitem{kingma2015adam}
 D. P. Kingma and J. Ba,
 ``Adam: A Method for Stochastic Optimization,''
 in \textit{International Conference on Learning Representations (ICLR)}, 2015.\\
-Available: \url{https://arxiv.org/abs/1412.6980}
+\href{https://arxiv.org/abs/1412.6980}{arXiv:1412.6980}
 
 \end{thebibliography}
 
