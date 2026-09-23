@@ -8,6 +8,7 @@
 \usepackage{xurl}
 \usepackage{pgfplots}
 \usepackage{placeins}
+\usepackage{needspace}
 \usepackage[hidelinks]{hyperref}
 \usepackage[font=footnotesize]{subfig}
 \pgfplotsset{compat=1.18}
@@ -205,7 +206,7 @@ The deep models process RGB images directly and learn spatial features from the 
     \label{fig:arch_cnn}
 \end{figure}
 
-\begin{figure}[!t]
+\begin{figure}[htbp]
     \centering
     \includegraphics[width=\linewidth]{arch_resnet.png}
     \caption{Two-phase transfer-learning scheme, illustrated with ResNet18. The ImageNet-pretrained backbone is frozen during a short head-only warm-up, its deepest stage is then unfrozen for fine-tuning, and a new classifier head is trained from scratch. ResNet50, EfficientNet-B0, and ConvNeXt-Tiny follow the same procedure at a $224\times224$ input resolution.}
@@ -293,7 +294,7 @@ where $P_n$ and $R_n$ are the precision and recall at the $n$-th threshold; its 
 \subsection{Quantitative Comparison}
 Table~\ref{tab:test_results} reports balanced operating-point performance on the untouched 79-image test set. The ResNet50--ConvNeXt ensemble reaches 0.861 accuracy, 0.947 unsafe recall, and 0.970 ROC-AUC. ResNet50 attains the highest single-model accuracy (0.924) and MCC (0.848), while EfficientNet-B0 attains the highest unsafe recall (0.974) and ROC-AUC (0.979). All nine models are compared in Fig.~\ref{fig:paper_model_comparison}.
 
-\begin{table}[!t]
+\begin{table}[htbp]
 \centering
 \caption{Held-out Test Performance for All Reported Models}
 \label{tab:test_results}
@@ -368,6 +369,8 @@ Max recall & 0.175 & 0.861 & 0.947 & 0.800 & 0.780 \\
     \label{fig:operating_analysis}
 \end{figure}
 
+\FloatBarrier
+\Needspace{8\baselineskip}
 \section{Discussion}
 \subsection{Interpretation of Results}
 The retrained ensemble provides a strong, recall-oriented balanced operating point, reaching 86.1\% test accuracy, 94.7\% unsafe recall, 0.867 unsafe $F_1$, 0.970 ROC-AUC, and 0.978 PR-AUC. The additional unsafe training data raises AUC beyond the previous 0.949 result and substantially improves balanced unsafe recall.
