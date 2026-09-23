@@ -14,18 +14,10 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage[font=footnotesize]{subfig}
 \pgfplotsset{compat=1.18}
+\emergencystretch=2em
 
 \DeclareMathOperator*{\argmax}{arg\,max}
 \DeclareMathOperator{\sgn}{sgn}
-
-% Float placement: pack large floats with surrounding text and avoid near-empty float pages
-\renewcommand{\topfraction}{0.95}
-\renewcommand{\bottomfraction}{0.85}
-\renewcommand{\textfraction}{0.06}
-\renewcommand{\floatpagefraction}{0.85}
-\setcounter{topnumber}{4}
-\setcounter{bottomnumber}{3}
-\setcounter{totalnumber}{6}
 
 \graphicspath{{./}{./figures/}{./tables/}}
 
@@ -233,8 +225,10 @@ The experiments were implemented in Python using scikit-learn for the classical 
 \centering
 \caption{Model Configuration}
 \label{tab:model_config}
-\footnotesize
-\begin{tabularx}{\textwidth}{l l X}
+\scriptsize
+\renewcommand{\arraystretch}{0.88}
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.25\linewidth} >{\raggedright\arraybackslash}p{0.17\linewidth} >{\raggedright\arraybackslash}X}
 \toprule
 \textbf{Model / Stage} & \textbf{Input Representation} & \textbf{Key Configuration} \\
 \midrule
@@ -250,7 +244,7 @@ ResNet50 & RGB $224\times224$ & Deeper ImageNet-pretrained residual network, two
 ConvNeXt-Tiny & RGB $224\times224$ & ImageNet-pretrained modern convolutional network, two-phase fine-tuning, horizontal-flip TTA. \\
 Ensemble & RGB $224\times224$ & Probability-level average of ResNet50 and ConvNeXt-Tiny, with balanced, high-recall, and max-recall thresholds tuned on validation. \\
 Deep-model training & RGB tensors & AdamW optimizer, cosine-annealing learning rate, two-phase schedule (head-only warm-up for about 5 epochs, then full-network fine-tuning), batch size 24--32, 45--70 epochs, label smoothing 0.05, dropout 0.4, weighted sampling, and class-weighted or focal loss for imbalance. \\
-Evaluation protocol & Train/validation/test & Four-way stratified 70/15/15 split; 365 training originals expanded to 2,730 train images, with 79 unaugmented validation and 79 untouched test images. \\
+Evaluation protocol & \shortstack[l]{Train/\\validation/test} & Four-way stratified 70/15/15 split; 365 training originals expanded to 2,730 train images, with 79 unaugmented validation and 79 untouched test images. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -307,7 +301,7 @@ Table~\ref{tab:test_results} reports balanced operating-point performance on the
 \label{tab:test_results}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
-\resizebox{\textwidth}{!}{%
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lccccccccc}
 \toprule
 \textbf{Model} & \textbf{Acc.} & \textbf{Bal. Acc.} & \textbf{Unsafe R} & \textbf{Unsafe P} & \textbf{Spec.} & \textbf{$F_1$} & \textbf{AUC} & \textbf{PR-AUC} & \textbf{MCC} \\
@@ -328,7 +322,7 @@ Naive Bayes & 0.734 & 0.734 & 0.737 & 0.718 & 0.732 & 0.727 & 0.866 & 0.884 & 0.
 
 \begin{figure}[!t]
     \centering
-    \includegraphics[width=\textwidth]{figures/fig02_model_comparison.png}
+    \includegraphics[width=\linewidth]{figures/fig02_model_comparison.png}
     \caption{Held-out test comparison of accuracy, unsafe recall, unsafe $F_1$, and ROC-AUC across all nine reported models.}
     \label{fig:paper_model_comparison}
 \end{figure}
@@ -339,10 +333,10 @@ AUC values are reported in Table~\ref{tab:test_results}. Figure~\ref{fig:paper_r
 \begin{figure}[t]
     \centering
     \subfloat[ROC curves.\label{fig:paper_roc_test}]{%
-        \includegraphics[width=0.49\textwidth]{figures/fig03_roc_test.png}}
+        \includegraphics[width=0.49\linewidth]{figures/fig03_roc_test.png}}
     \hfill
     \subfloat[Precision--recall curves.\label{fig:paper_pr_curves}]{%
-        \includegraphics[width=0.49\textwidth]{figures/fig04_pr_curves.png}}
+        \includegraphics[width=0.49\linewidth]{figures/fig04_pr_curves.png}}
     \caption{Receiver operating characteristic and precision--recall curves comparing all nine models on the held-out test set.}
     \label{fig:classwise_curve_analysis}
 \end{figure}
