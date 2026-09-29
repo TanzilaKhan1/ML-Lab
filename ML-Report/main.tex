@@ -10,7 +10,7 @@
 \usepackage{placeins}
 \usepackage{needspace}
 \usepackage{caption}
-\usepackage[hidelinks]{hyperref}
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
 \usepackage[font=footnotesize]{subfig}
 \pgfplotsset{compat=1.18}
 \emergencystretch=2em
@@ -128,9 +128,9 @@ Representative examples of the vehicle categories are shown in Figure~\ref{fig:l
 
 \begin{figure}[!htbp]
     \centering
-    \subfloat[Negative class.]{\includegraphics[width=0.4\linewidth]{bus_negative.png}}
+    \subfloat[Negative class.]{\includegraphics[width=0.4\linewidth,height=0.533\linewidth]{bus_negative.png}}
     \hfill
-    \subfloat[Positive class.]{\includegraphics[width=0.4\linewidth]{bus_positive.png}}
+    \subfloat[Positive class.]{\includegraphics[width=0.4\linewidth,height=0.533\linewidth]{bus_positive.png}}
     \caption{Representative bus samples.}
     \label{fig:bus_samples}
 \end{figure}
